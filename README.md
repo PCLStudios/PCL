@@ -1,4 +1,4 @@
-# PCL — Project Chronos Lock (v0.3.1)
+# PCL — Project Chronos Lock (v0.4.0)
 
 Voice-operated personal A.I. for Android. Side-panel UI, 80+ voice commands, whisper mode, online chatbot ("Third Eye").
 
@@ -25,3 +25,8 @@ Presets for Groq, OpenRouter, Gemini and any custom OpenAI-compatible server (e.
 ## Tweaking
 Commands: Commands.kt (the Commands screen is generated from that list). Wake matching: Wake.kt.
 Voice defaults: Voice screen. A.I. persona: System screen.
+
+## v0.4.0 extras
+- **ALWAYS ON** (round button on Home): off = the mic only listens while the big button has engaged a session.
+- **PROGRAMS** (side panel): program steps that run when Combat Mode / Quantum Focus turn on or off (open an app, play a song, media key...).
+- For programs to open apps with the screen off: System > ALLOW OVER OTHER APPS.

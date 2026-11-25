@@ -19,7 +19,7 @@ import java.util.Locale
 
 enum class Phase { STANDBY, LISTENING, SPEAKING, THINKING }
 enum class Screen(val label: String, val glyph: String) {
-    HOME("HOME", "◎"), EYE("THIRD EYE", "◉"), NOTES("NOTES", "✎"), HELP("COMMANDS", "☰"), VOICE("VOICE", "♪"), SYSTEM("SYSTEM", "⚙")
+    HOME("HOME", "◎"), EYE("THIRD EYE", "◉"), FLOWS("PROGRAMS", "⚡"), NOTES("NOTES", "✎"), HELP("COMMANDS", "☰"), VOICE("VOICE", "♪"), SYSTEM("SYSTEM", "⚙")
 }
 data class VoiceOpt(val name: String, val label: String)
 data class Msg(val fromUser: Boolean, val text: String)
@@ -48,6 +48,8 @@ object ChronosEngine {
     val combat = MutableStateFlow(false)
     val quantum = MutableStateFlow(false)
     val whisper = MutableStateFlow(false)
+    val alwaysOn = MutableStateFlow(true)           // false = the mic only opens while a session is engaged (big button)
+    val keepMusic = MutableStateFlow(true)          // try to resume music the recogniser pauses
     val thirdEye = MutableStateFlow(false)
     val torch = MutableStateFlow(false)
     val phase = MutableStateFlow(Phase.STANDBY)
@@ -120,6 +122,9 @@ object ChronosEngine {
         pitch.value = prefs.getFloat("pitch", 1.0f)
         rate.value = prefs.getFloat("rate", 1.0f)
         whisper.value = prefs.getBoolean("whisper", false)
+        alwaysOn.value = prefs.getBoolean("alwaysOn", true)
+        keepMusic.value = prefs.getBoolean("keepMusic", true)
+        Flows.init(prefs)
         sessionMin.value = prefs.getInt("sessionMin", 0)
         aiUrl.value = prefs.getString("aiUrl", ThirdEyeAI.DEFAULT_URL) ?: ThirdEyeAI.DEFAULT_URL
         aiModel.value = prefs.getString("aiModel", ThirdEyeAI.DEFAULT_MODEL) ?: ThirdEyeAI.DEFAULT_MODEL
@@ -160,14 +165,35 @@ object ChronosEngine {
             say("Chronos Lock Disengaged")
         } else { locked.value = true; bumpIdle(); say("Chronos Lock Engaged") }
     }
+    /** Mode switches run the user's programmed steps (see Flows / PROGRAMS screen). */
+    fun setCombat(on: Boolean) {
+        if (combat.value == on) return
+        combat.value = on
+        ctx?.let { Flows.run(it, Flows.get(if (on) "combat_on" else "combat_off")) }
+    }
+    fun setQuantum(on: Boolean) {
+        if (quantum.value == on) return
+        quantum.value = on
+        ctx?.let { Flows.run(it, Flows.get(if (on) "quantum_on" else "quantum_off")) }
+    }
+    /** Lets a programmed step speak. */
+    fun announce(text: String) { say(text) }
+
+    fun setAlwaysOn(on: Boolean) {
+        alwaysOn.value = on
+        prefs.edit().putBoolean("alwaysOn", on).apply()
+        if (running && !speaking && !thinking) restartSoon(100)      // opens or closes the mic right away
+    }
+    fun setKeepMusic(on: Boolean) { keepMusic.value = on; prefs.edit().putBoolean("keepMusic", on).apply() }
+
     fun toggleCombat() {
         if (needLock()) return
-        bumpIdle(); combat.value = !combat.value
+        bumpIdle(); setCombat(!combat.value)
         say(if (combat.value) "Combat mode has been engaged" else "Combat mode has been disengaged")
     }
     fun toggleQuantum() {
         if (needLock()) return
-        bumpIdle(); quantum.value = !quantum.value
+        bumpIdle(); setQuantum(!quantum.value)
         say(if (quantum.value) "Quantum focus has been approved" else "Quantum focus has been disengaged")
     }
     fun toggleWhisper() {
@@ -179,7 +205,11 @@ object ChronosEngine {
         if (!com.pcl.chronoslock.torch(c, !torch.value)) say("Flashlight unavailable")
     }
     fun toggleEye() { if (thirdEye.value) say(closeEye()) else say(openEye()) }
-    fun allOff() { locked.value = false; combat.value = false; quantum.value = false; thirdEye.value = false; main.removeCallbacks(idleRun) }
+    fun allOff() {
+        locked.value = false; thirdEye.value = false; main.removeCallbacks(idleRun)
+        setCombat(false); setQuantum(false)
+        if (running && !speaking && !thinking) restartSoon(100)
+    }
     fun preview() = say("Hello. I'm Chronos Lock. This is how I sound.")
 
     // ---- settings ----
@@ -505,6 +535,12 @@ object ChronosEngine {
     private fun listen() {
         val c = ctx ?: return
         if (!running || speaking || thinking) return
+        if (!alwaysOn.value && !locked.value && !thirdEye.value) {
+            // "Always on" is off and no session is engaged: the mic stays closed until the big button is pressed
+            destroyRecognizer(); main.removeCallbacks(watchdog); handled = false
+            phase.value = Phase.STANDBY
+            return
+        }
         if (!SpeechRecognizer.isRecognitionAvailable(c)) {
             lastHeard.value = "No speech recogniser. Install Speech Services by Google"; phase.value = Phase.STANDBY; return
         }
@@ -525,12 +561,21 @@ object ChronosEngine {
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, if (w) 1800L else if (eye) 1300L else 900L)
             if (w) putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500L)
         }
+        val am = c.getSystemService(android.media.AudioManager::class.java)
+        val musicWas = keepMusic.value && runCatching { am.isMusicActive }.getOrDefault(false)
         val id = ++session
         phase.value = Phase.LISTENING
         recognizer = SpeechRecognizer.createSpeechRecognizer(c).also {
             it.setRecognitionListener(makeListener(id))
             it.startListening(intent)
         }
+        if (musicWas) main.postDelayed({
+            // Android pauses other players while the recogniser listens; if that happened, press play again
+            if (running && !speaking && !thinking && id == session && runCatching { !am.isMusicActive }.getOrDefault(false)) {
+                am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
+                am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
+            }
+        }, 900)
         main.removeCallbacks(watchdog)
         main.postDelayed(watchdog, 30_000L)
     }

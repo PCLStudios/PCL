@@ -70,25 +70,25 @@ private fun audio(ctx: Context) = ctx.getSystemService(AudioManager::class.java)
 private fun vol(ctx: Context, dir: Int, ok: String): String {
     audio(ctx).adjustStreamVolume(AudioManager.STREAM_MUSIC, dir, 0); return ok
 }
-private fun volTo(ctx: Context, pct: Int): String {
+internal fun volTo(ctx: Context, pct: Int): String {
     val a = audio(ctx); val max = a.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
     a.setStreamVolume(AudioManager.STREAM_MUSIC, (max * pct.coerceIn(0, 100) / 100f).toInt(), 0)
     return "Volume at ${pct.coerceIn(0, 100)} percent"
 }
 /** Media keys work even with the screen off. */
-private fun media(ctx: Context, key: Int, ok: String): String {
+internal fun media(ctx: Context, key: Int, ok: String): String {
     val a = audio(ctx)
     a.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
     a.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
     return ok
 }
-private fun go(ctx: Context, i: Intent, ok: String): String {
+internal fun go(ctx: Context, i: Intent, ok: String): String {
     // Android silently blocks one app opening another from the background, so be honest instead of saying "Opening..."
-    if (!ChronosEngine.appVisible) return "I can only do that while PCL is open on screen. Open PCL and ask again"
+    if (!ChronosEngine.appVisible && !Settings.canDrawOverlays(ctx)) return "I can only do that while PCL is open on screen. Open PCL and ask again"
     return try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok } catch (e: Exception) { "I couldn't open that" }
 }
 
-private fun openApp(ctx: Context, name: String): String {
+internal fun openApp(ctx: Context, name: String): String {
     val q = name.trim()
     if (q.isBlank()) return "Which app should I open?"
     val pm = ctx.packageManager
@@ -158,12 +158,12 @@ object Commands {
     /** Order matters: specific commands first, general ones last. */
     val all: List<Cmd> = listOf(
         // ---- MODES ----
-        Cmd("MODES", "disengage combat mode", "Turns combat mode off.", { it.has("combat") && it.off() }) { ChronosEngine.combat.value = false; "Combat mode has been disengaged" },
-        Cmd("MODES", "disengage quantum focus", "Turns quantum focus off.", { it.has("quantum", "focus") && it.off() }) { ChronosEngine.quantum.value = false; "Quantum focus has been disengaged" },
-        Cmd("MODES", "stand down  /  all clear", "Turns off combat mode and quantum focus together.", { it.has("stand down", "all clear", "all modes off") }) { ChronosEngine.combat.value = false; ChronosEngine.quantum.value = false; "All modes have been disengaged" },
-        Cmd("MODES", "red alert", "Instantly engages combat mode.", { it.has("red alert") }) { ChronosEngine.combat.value = true; "Red alert. Combat mode has been engaged" },
-        Cmd("MODES", "combat mode", "Engages combat mode.", { it.has("combat") }) { ChronosEngine.combat.value = true; "Combat mode has been engaged" },
-        Cmd("MODES", "quantum focus", "Approves and activates quantum focus.", { it.has("quantum") || it.hasW("focus") }) { ChronosEngine.quantum.value = true; "Quantum focus has been approved" },
+        Cmd("MODES", "disengage combat mode", "Turns combat mode off.", { it.has("combat") && it.off() }) { ChronosEngine.setCombat(false); "Combat mode has been disengaged" },
+        Cmd("MODES", "disengage quantum focus", "Turns quantum focus off.", { it.has("quantum", "focus") && it.off() }) { ChronosEngine.setQuantum(false); "Quantum focus has been disengaged" },
+        Cmd("MODES", "stand down  /  all clear", "Turns off combat mode and quantum focus together.", { it.has("stand down", "all clear", "all modes off") }) { ChronosEngine.setCombat(false); ChronosEngine.setQuantum(false); "All modes have been disengaged" },
+        Cmd("MODES", "red alert", "Instantly engages combat mode.", { it.has("red alert") }) { ChronosEngine.setCombat(true); "Red alert. Combat mode has been engaged" },
+        Cmd("MODES", "combat mode", "Engages combat mode.", { it.has("combat") }) { ChronosEngine.setCombat(true); "Combat mode has been engaged" },
+        Cmd("MODES", "quantum focus", "Approves and activates quantum focus.", { it.has("quantum") || it.hasW("focus") }) { ChronosEngine.setQuantum(true); "Quantum focus has been approved" },
         Cmd("MODES", "stop whispering  /  normal mode", "Returns listening to normal.", { (it.has("whisper") && it.off()) || it.has("normal mode", "stop whispering") }) { ChronosEngine.setWhisper(false); "Whisper mode disabled" },
         Cmd("MODES", "whisper mode", "Listens harder for quiet speech (online recognition, waits longer) and answers quietly.", { it.has("whisper") }) { ChronosEngine.setWhisper(true); "Whisper mode enabled. I am listening closely" },
         // ---- THIRD EYE ----

@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -70,7 +71,7 @@ fun HomeScreen() {
     val quantum by ChronosEngine.quantum.collectAsState()
     val whisper by ChronosEngine.whisper.collectAsState()
     val eye by ChronosEngine.thirdEye.collectAsState()
-    val torch by ChronosEngine.torch.collectAsState()
+    val alwaysOn by ChronosEngine.alwaysOn.collectAsState()
     val phase by ChronosEngine.phase.collectAsState()
     val heard by ChronosEngine.lastHeard.collectAsState()
     val reply by ChronosEngine.lastReply.collectAsState()
@@ -78,7 +79,10 @@ fun HomeScreen() {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(8.dp))
-        LockButton(locked, phase) { ChronosEngine.toggleLock() }
+        Box(Modifier.fillMaxWidth()) {
+            Box(Modifier.align(Alignment.Center)) { LockButton(locked, phase) { ChronosEngine.toggleLock() } }
+            AlwaysOnButton(alwaysOn, Modifier.align(Alignment.TopEnd)) { ChronosEngine.setAlwaysOn(!alwaysOn) }
+        }
         Spacer(Modifier.height(10.dp))
 
         val (status, col) = when {
@@ -87,6 +91,7 @@ fun HomeScreen() {
             eye -> "THIRD EYE · TALK TO ME" to C.Violet
             locked && whisper -> "ENGAGED · WHISPER MODE" to C.Green
             locked -> "ENGAGED · SAY A COMMAND" to C.Green
+            !alwaysOn -> "MIC OFF · TAP THE BUTTON TO LISTEN" to C.Soft
             whisper -> "STANDBY · WHISPER “CHRONOS LOCK”" to C.Soft
             else -> "STANDBY · SAY “CHRONOS LOCK”" to C.Soft
         }
@@ -117,7 +122,6 @@ fun HomeScreen() {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Tile("WHISPER", if (whisper) "ON" else "OFF", "◌", C.Violet, whisper, Modifier.weight(1f)) { ChronosEngine.toggleWhisper() }
-            Tile("FLASHLIGHT", if (torch) "ON" else "OFF", "✦", C.Amber, torch, Modifier.weight(1f)) { ChronosEngine.toggleTorch() }
             Tile("THIRD EYE", if (eye) "LIVE" else "OFF", "◉", C.Cyan, eye, Modifier.weight(1f)) { ChronosEngine.toggleEye() }
         }
 
@@ -183,11 +187,25 @@ private fun LockButton(locked: Boolean, phase: Phase, onClick: () -> Unit) {
             drawCircle(color, radius = r * 0.6f, style = Stroke(if (locked) 5.dp.toPx() else 3.dp.toPx()))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Filled.Lock, null, tint = color, modifier = Modifier.size(60.dp))
+            Icon(Icons.Filled.Lock, null, tint = color, modifier = Modifier.size(48.dp))
             Spacer(Modifier.height(8.dp))
-            Text2(if (locked) "ENGAGED" else "DISENGAGED", color, 13, bold = true, spacing = 3)
-            Text2(if (locked) "tap to disengage" else "tap or say “Chronos Lock”", C.Dim, 10, mono = false)
+            Text2(if (locked) "ENGAGED" else "DISENGAGED", color, 12, bold = true, spacing = 2)
+            Text2(if (locked) "tap to disengage" else "tap to engage", C.Soft, 10, mono = false)
         }
+    }
+}
+
+/** Small round switch beside the big button: ON = always listening for "Chronos Lock"; OFF = mic only while engaged. */
+@Composable
+private fun AlwaysOnButton(on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = if (on) C.Cyan else C.Soft
+    Column(
+        modifier.size(62.dp).clip(CircleShape).background(c.copy(alpha = if (on) 0.16f else 0.05f))
+            .border(1.5.dp, c, CircleShape).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+    ) {
+        Text2("ALWAYS", c, 8, bold = true, spacing = 1)
+        Text2(if (on) "ON" else "OFF", c, 13, bold = true)
     }
 }
 

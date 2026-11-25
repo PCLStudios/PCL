@@ -1,8 +1,23 @@
 # PCL handoff (for the next AI / session)
 
-Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Package `com.pcl.chronoslock`. Version 0.3.1.
+Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Package `com.pcl.chronoslock`. Version 0.4.0.
 User's goal: always-listening voice assistant "Chronos Lock" with combat/quantum modes, many voice commands, whisper
 understanding, fuzzy wake word, session-style locking, an online chatbot ("Third Eye"), and a nicer side-panel UI.
+
+## v0.4.0 changes
+- ALWAYS ON switch (small round button by the big lock button, Home). ON = old behaviour (mic always listens for the wake word).
+  OFF = mic closed in standby; pressing the big button engages the session and opens the mic; disengage/timeout closes it again.
+  Gate lives at the top of ChronosEngine.listen(). Pref "alwaysOn" (default true).
+- Big button text no longer overflows the circle; flashlight tile removed from Home (the "flashlight on/off" voice commands remain).
+- KEEP MUSIC PLAYING (Voice screen, pref keepMusic): Android pauses other players while SpeechRecognizer listens (it takes audio focus).
+  listen() notes whether music was active and ~900 ms later sends MEDIA_PLAY if it stopped. Best effort; cannot be fully fixed from an app.
+- PROGRAMS screen (Screens3.kt, Flows.kt): Combat and Quantum each have ON and OFF step lists. Step types: open app, play song
+  (MEDIA_PLAY_FROM_SEARCH, optional target app, several lines = random pick), open link (optional app), media key, volume, say, flashlight.
+  Each step has a wait (seconds). Stored as JSON in prefs "flow_<slot>". Triggered by ChronosEngine.setCombat/setQuantum
+  (buttons, voice, red alert, stand down, allOff all go through them).
+- Background launches: System > ALLOW OVER OTHER APPS (SYSTEM_ALERT_WINDOW). go() allows launches if PCL is visible OR overlay permission granted.
+  Android 15 narrowed that exemption, so it may still be blocked on newer phones.
+- Verified on JVM: Flows.kt + Commands.kt + Util.kt + Wake.kt compile against stubs; 57/57 routing. Engine/Compose NOT compiled locally.
 
 ## v0.3.1 changes (bug-fix release)
 Reported by user: Third Eye said it "can't reach my network core" + assorted minor bugs.

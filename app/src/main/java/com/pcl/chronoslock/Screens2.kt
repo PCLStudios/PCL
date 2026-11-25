@@ -83,6 +83,7 @@ fun VoiceScreen() {
     val pitch by ChronosEngine.pitch.collectAsState()
     val rate by ChronosEngine.rate.collectAsState()
     val whisper by ChronosEngine.whisper.collectAsState()
+    val keepMusic by ChronosEngine.keepMusic.collectAsState()
     val colors = SliderDefaults.colors(thumbColor = C.Cyan, activeTrackColor = C.Cyan, inactiveTrackColor = C.Dim)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
@@ -97,6 +98,19 @@ fun VoiceScreen() {
                 }
                 Spacer(Modifier.padding(6.dp))
                 Chip(if (whisper) "ON" else "OFF", whisper, C.Violet) { ChronosEngine.setWhisper(!whisper) }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Panel(accent = if (keepMusic) C.Green else C.Line) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text2("KEEP MUSIC PLAYING", if (keepMusic) C.Green else C.Text, 14, bold = true, spacing = 1)
+                    Spacer(Modifier.height(4.dp))
+                    Text2("Android pauses music while the mic listens. This presses play again right after. Best effort: with ALWAYS OFF on the home screen the mic only opens when you engage, so music is left alone the rest of the time.", C.Soft, 12, mono = false)
+                }
+                Spacer(Modifier.padding(6.dp))
+                Chip(if (keepMusic) "ON" else "OFF", keepMusic, C.Green) { ChronosEngine.setKeepMusic(!keepMusic) }
             }
         }
 
@@ -219,10 +233,18 @@ fun SystemScreen() {
             open(ctx, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)))
         }
 
+        Spacer(Modifier.height(8.dp))
+        PillButton("ALLOW OVER OTHER APPS", modifier = Modifier.fillMaxWidth()) {
+            // lets programmed modes open music apps even when PCL is not on screen (best effort, depends on Android version)
+            open(ctx, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)))
+        }
+        Spacer(Modifier.height(4.dp))
+        Text2("Needed for PROGRAMS to open apps by voice with the screen off. Without it they only work while PCL is open.", C.Soft, 11, mono = false)
+
         SectionLabel("RESET")
         PillButton("DISENGAGE EVERYTHING", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.allOff() }
         Spacer(Modifier.height(16.dp))
-        Text2("PCL v0.3.1 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("PCL v0.4.0 · ${Commands.all.size} commands", C.Dim, 11)
         Spacer(Modifier.height(24.dp))
     }
 }

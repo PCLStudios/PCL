@@ -101,6 +101,7 @@ fun PclApp() {
                 when (tab) {
                     Screen.HOME -> HomeScreen()
                     Screen.EYE -> EyeScreen()
+                    Screen.FLOWS -> FlowsScreen()
                     Screen.NOTES -> NotesScreen()
                     Screen.HELP -> HelpScreen()
                     Screen.VOICE -> VoiceScreen()
@@ -179,6 +180,6 @@ private fun SidePanel(current: Screen, onPick: (Screen) -> Unit) {
             Chip(if (locked) "DISENGAGE" else "ENGAGE", locked, C.Green) { ChronosEngine.toggleLock() }
         }
         Spacer(Modifier.height(14.dp))
-        Text2("v0.3.1 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("v0.4.0 · ${Commands.all.size} commands", C.Dim, 11)
     }
 }
