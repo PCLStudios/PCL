@@ -112,9 +112,9 @@ fun VoiceScreen() {
         if (voices.isEmpty()) Text2("No voices found yet — install Google Speech Services below.", C.Soft, 12, mono = false)
 
         SectionLabel("TUNING")
-        Text2("PITCH  %.2f".format(pitch), C.Soft, 12)
+        Text2("PITCH  %.2f".format(java.util.Locale.US, pitch), C.Soft, 12)
         Slider(pitch, { ChronosEngine.setPitch(it) }, valueRange = 0.7f..1.4f, colors = colors, onValueChangeFinished = { ChronosEngine.preview() })
-        Text2("SPEED  %.2f".format(rate), C.Soft, 12)
+        Text2("SPEED  %.2f".format(java.util.Locale.US, rate), C.Soft, 12)
         Slider(rate, { ChronosEngine.setRate(it) }, valueRange = 0.7f..1.3f, colors = colors, onValueChangeFinished = { ChronosEngine.preview() })
 
         Spacer(Modifier.height(6.dp))
@@ -143,7 +143,9 @@ fun SystemScreen() {
     var key by remember(key0) { mutableStateOf(key0) }
     var persona by remember(persona0) { mutableStateOf(persona0) }
     var saved by remember { mutableStateOf(false) }
-    val provider = ThirdEyeAI.PROVIDERS.firstOrNull { it.url.trimEnd('/') == url.trim().trimEnd('/') }
+    var testing by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf("") }
+    val provider = ThirdEyeAI.providerFor(url)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         ScreenTitle("SYSTEM", "Session, Third Eye A.I. and phone setup.")
@@ -190,17 +192,28 @@ fun SystemScreen() {
             PillButton(if (saved) "✓ SAVED" else "SAVE", C.Green, filled = true, modifier = Modifier.weight(1f)) {
                 ChronosEngine.setAi(url, model, key, persona); saved = true
             }
-            PillButton("TEST", C.Cyan, modifier = Modifier.weight(1f)) {
-                ChronosEngine.setAi(url, model, key, persona); saved = true
-                ChronosEngine.tab.value = Screen.EYE; ChronosEngine.askTyped("Who are you?")
+            PillButton(if (testing) "TESTING…" else "TEST", C.Cyan, modifier = Modifier.weight(1f)) {
+                if (!testing) {
+                    ChronosEngine.setAi(ThirdEyeAI.cleanUrl(url), model, key, persona); saved = true
+                    testing = true; testResult = ""
+                    ChronosEngine.testAi { testResult = it; testing = false }
+                }
             }
             PillButton("RESET PERSONA", C.Amber, modifier = Modifier.weight(1f)) { persona = ThirdEyeAI.DEFAULT_PERSONA; saved = false }
+        }
+        if (testResult.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            val ok = testResult.startsWith("✓")
+            Panel(accent = if (ok) C.Green else C.Red) { Text2(testResult, if (ok) C.Green else C.Red, 12, mono = false) }
         }
 
         SectionLabel("PHONE SETUP")
         Text2("For rock-solid listening with the screen off, exclude PCL from battery optimisation and install Speech Services by Google (with offline English downloaded).", C.Soft, 12, mono = false)
         Spacer(Modifier.height(8.dp))
-        PillButton("BATTERY OPTIMISATION", modifier = Modifier.fillMaxWidth()) { open(ctx, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        PillButton("ALLOW BACKGROUND (BATTERY)", modifier = Modifier.fillMaxWidth()) {
+            // one-tap system dialog; with the screen off Android otherwise cuts the network and the mic
+            open(ctx, Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.packageName)))
+        }
         Spacer(Modifier.height(8.dp))
         PillButton("APP PERMISSIONS", modifier = Modifier.fillMaxWidth()) {
             open(ctx, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)))
@@ -209,7 +222,7 @@ fun SystemScreen() {
         SectionLabel("RESET")
         PillButton("DISENGAGE EVERYTHING", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.allOff() }
         Spacer(Modifier.height(16.dp))
-        Text2("PCL v0.3.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("PCL v0.3.1 · ${Commands.all.size} commands", C.Dim, 11)
         Spacer(Modifier.height(24.dp))
     }
 }

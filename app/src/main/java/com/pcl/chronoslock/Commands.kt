@@ -82,9 +82,11 @@ private fun media(ctx: Context, key: Int, ok: String): String {
     a.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
     return ok
 }
-private fun go(ctx: Context, i: Intent, ok: String) = try {
-    ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok
-} catch (e: Exception) { "I couldn't open that" }
+private fun go(ctx: Context, i: Intent, ok: String): String {
+    // Android silently blocks one app opening another from the background, so be honest instead of saying "Opening..."
+    if (!ChronosEngine.appVisible) return "I can only do that while PCL is open on screen. Open PCL and ask again"
+    return try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok } catch (e: Exception) { "I couldn't open that" }
+}
 
 private fun openApp(ctx: Context, name: String): String {
     val q = name.trim()
@@ -131,13 +133,27 @@ object Commands {
         return ""
     }
 
-    fun isEyeClose(s: String) = (s.has(*EYE) && s.off()) || s.has("goodbye", "that is all", "close the eye", "end chat")
+    /** Only short phrases count, so a long question that happens to contain "stop" or "that is all" isn't mistaken for "close". */
+    fun isEyeClose(s: String): Boolean {
+        if (s.split(" ").size > 6) return false
+        return (s.has(*EYE) && s.off()) || s.has("goodbye", "that is all", "close the eye", "end chat")
+    }
 
     /** Commands that carry a free-form payload may be longer than the short-phrase limit. */
     fun openEnded(s: String) = listOf("ask", "take a note", "make a note", "add a note", "note", "remember", "remind me", "search for",
         "look up", "say", "repeat after me", "spell", "calculate", "what is", "open", "set").any { s == it || s.startsWith("$it ") }
 
-    fun match(body: String): Cmd? = all.firstOrNull { it.match(body) }
+    /** Commands that carry free text (a note, a message to say...) win over keyword commands, so "take a note about the timer" is a note. */
+    private val PAYLOAD_LEADS = listOf("ask ", "say ", "spell ", "note ", "take a note", "make a note", "add a note", "remember that",
+        "remind me", "search for", "look up", "repeat after me")
+    private val PAYLOAD_PHRASES = setOf("ask <anything>", "say <anything>", "spell <word>", "take a note <anything>",
+        "remind me in ten minutes to <task>", "search for  <anything>")
+
+    fun match(body: String): Cmd? {
+        if (PAYLOAD_LEADS.any { body.startsWith(it) })
+            all.firstOrNull { it.phrase in PAYLOAD_PHRASES && it.match(body) }?.let { return it }
+        return all.firstOrNull { it.match(body) }
+    }
 
     /** Order matters: specific commands first, general ones last. */
     val all: List<Cmd> = listOf(
@@ -170,7 +186,7 @@ object Commands {
         // ---- MEDIA ----
         Cmd("MEDIA", "pause music  /  stop music", "Pauses whatever is playing. Works with the screen off.", { it.has("music", "song", "playback", "video") && (it.off() || it.has("pause")) || it == "pause" }) { media(it, KeyEvent.KEYCODE_MEDIA_PAUSE, "Paused") },
         Cmd("MEDIA", "play music  /  resume", "Resumes playback.", { it.has("play music", "resume", "play the music", "continue music") || it == "play" }) { media(it, KeyEvent.KEYCODE_MEDIA_PLAY, "Playing") },
-        Cmd("MEDIA", "next song  /  skip", "Skips to the next track.", { it.has("next song", "next track", "skip", "next music") }) { media(it, KeyEvent.KEYCODE_MEDIA_NEXT, "Next track") },
+        Cmd("MEDIA", "next song  /  skip", "Skips to the next track.", { it.has("next song", "next track", "next music") || it.hasW("skip") }) { media(it, KeyEvent.KEYCODE_MEDIA_NEXT, "Next track") },
         Cmd("MEDIA", "previous song", "Goes back one track.", { it.has("previous song", "previous track", "last song", "go back a song") }) { media(it, KeyEvent.KEYCODE_MEDIA_PREVIOUS, "Previous track") },
         // ---- TIMERS & ALARMS ----
         Cmd("TIMERS & ALARMS", "cancel timer", "Cancels every running timer and reminder.", { it.has("timer", "reminder") && it.off() }) { ChronosEngine.cancelTimer(); "Timers cancelled" },
@@ -215,8 +231,8 @@ object Commands {
         Cmd("INFO", "storage space", "How much storage is free.", { it.has("storage", "free space", "disk space") }) { storage() },
         Cmd("INFO", "phone info", "Model and Android version.", { it.has("phone info", "what phone", "which phone", "device info") }) { "This is a ${Build.MANUFACTURER} ${Build.MODEL} running Android ${Build.VERSION.RELEASE}" },
         Cmd("INFO", "uptime", "How long the phone has been on.", { it.has("uptime", "how long has the phone") }) { "The phone has been running for ${uptime()}" },
-        Cmd("INFO", "diagnostics", "Full system check: modes, battery, network, time.", { it.has("diagnostic", "system check", "scan") }) { "Diagnostics complete. ${battery(it)}. ${network(it)}. The time is ${clock()}. All systems nominal" },
-        Cmd("INFO", "status report", "Reads out the state of every system.", { it.has("status", "report") }) {
+        Cmd("INFO", "diagnostics", "Full system check: modes, battery, network, time.", { it.has("diagnostic", "system check") || it.hasW("scan") }) { "Diagnostics complete. ${battery(it)}. ${network(it)}. The time is ${clock()}. All systems nominal" },
+        Cmd("INFO", "status report", "Reads out the state of every system.", { it.hasW("status", "report") }) {
             "Chronos Lock is ${on(ChronosEngine.locked.value)}. Combat mode is ${on(ChronosEngine.combat.value)}. Quantum focus is ${on(ChronosEngine.quantum.value)}. Whisper mode is ${on(ChronosEngine.whisper.value)}."
         },
         Cmd("INFO", "good morning / afternoon / evening", "A greeting that fits the time of day.", { it.has("good morning", "good afternoon", "good evening") }) {
@@ -226,10 +242,10 @@ object Commands {
         // ---- FUN ----
         Cmd("EXTRAS", "tell me a joke", "A random joke.", { it.hasW("joke") || it.has("make me laugh") }) { JOKES.random() },
         Cmd("EXTRAS", "tell me a fact", "A random fun fact.", { it.hasW("fact") || it.has("did you know") }) { FACTS.random() },
-        Cmd("EXTRAS", "motivate me", "A short motivational quote.", { it.has("motivate", "inspire me", "quote") }) { QUOTES.random() },
+        Cmd("EXTRAS", "motivate me", "A short motivational quote.", { it.has("motivate", "inspire me") || it.hasW("quote") }) { QUOTES.random() },
         Cmd("EXTRAS", "eight ball  /  should I …", "Shake the magic eight ball.", { it.has("eight ball", "8 ball", "magic ball") || it.startsWith("should i") }) { BALL.random() },
         Cmd("EXTRAS", "rock paper scissors", "She picks one.", { it.has("rock paper") }) { "I choose " + listOf("rock", "paper", "scissors").random() },
-        Cmd("EXTRAS", "flip a coin", "Heads or tails.", { it.has("coin") }) { if (Random.nextBoolean()) "Heads" else "Tails" },
+        Cmd("EXTRAS", "flip a coin", "Heads or tails.", { it.hasW("coin") }) { if (Random.nextBoolean()) "Heads" else "Tails" },
         Cmd("EXTRAS", "roll a dice", "Rolls a six-sided die.", { it.has("dice", "roll a die") }) { "You rolled a ${Random.nextInt(1, 7)}" },
         Cmd("EXTRAS", "random number", "A number from 1 to 100.", { it.has("random number") }) { "Your number is ${Random.nextInt(1, 101)}" },
         Cmd("EXTRAS", "spell <word>", "Spells a word letter by letter.", { it.startsWith("spell ") }) {

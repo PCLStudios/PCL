@@ -1,4 +1,4 @@
-# PCL — Project Chronos Lock (v0.3.0)
+# PCL — Project Chronos Lock (v0.3.1)
 
 Voice-operated personal A.I. for Android. Side-panel UI, 80+ voice commands, whisper mode, online chatbot ("Third Eye").
 

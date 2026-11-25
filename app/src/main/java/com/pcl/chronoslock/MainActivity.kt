@@ -53,6 +53,10 @@ class MainActivity : ComponentActivity() {
         ChronosEngine.init(this)
         setContent { PclApp() }
     }
+
+    // Android only lets PCL open other apps / settings while it is on screen: remember whether it is.
+    override fun onStart() { super.onStart(); ChronosEngine.appVisible = true }
+    override fun onStop() { ChronosEngine.appVisible = false; super.onStop() }
 }
 
 internal fun startChronosService(ctx: Context) =
@@ -175,6 +179,6 @@ private fun SidePanel(current: Screen, onPick: (Screen) -> Unit) {
             Chip(if (locked) "DISENGAGE" else "ENGAGE", locked, C.Green) { ChronosEngine.toggleLock() }
         }
         Spacer(Modifier.height(14.dp))
-        Text2("v0.3.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("v0.3.1 · ${Commands.all.size} commands", C.Dim, 11)
     }
 }

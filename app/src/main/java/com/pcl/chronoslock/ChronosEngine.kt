@@ -89,6 +89,9 @@ object ChronosEngine {
     private var session = 0                 // ignores callbacks from recognisers we already replaced
     private var utt = 0
     private var errorStreak = 0
+    @Volatile var appVisible = false            // set by MainActivity: Android only lets apps open other apps while on screen
+    private var lastSpoken = ""                 // normalised text of her last reply (to ignore her own echo)
+    private var lastSpeechEnd = 0L
     private var onlineBroken = false        // online recognition failed (no network): fall back to offline
     private var offlineMissing = false      // offline model not installed: use online
     private var nextTimerId = 1
@@ -128,7 +131,11 @@ object ChronosEngine {
         tts = TextToSpeech(ctx) { s -> if (s == TextToSpeech.SUCCESS) onTtsReady() }
     }
 
-    fun start() { running = true; main.post { if (!speaking && !thinking) listen() } }
+    fun start() {
+        if (running) return                       // the activity re-sends start every time it opens: don't restart the mic mid-sentence
+        running = true
+        main.post { if (!speaking && !thinking) listen() }
+    }
 
     fun stop() {
         running = false
@@ -136,6 +143,8 @@ object ChronosEngine {
         main.removeCallbacksAndMessages(null)
         timerRuns.clear(); timers.value = emptyList()
         destroyRecognizer()
+        runCatching { tts?.stop() }
+        speaking = false; thinking = false; handled = false     // stale flags would block listening after a restart
         phase.value = Phase.STANDBY
     }
 
@@ -181,7 +190,7 @@ object ChronosEngine {
     }
     fun setSessionMin(m: Int) { sessionMin.value = m; prefs.edit().putInt("sessionMin", m).apply(); bumpIdle() }
     fun setAi(url: String, model: String, key: String, persona: String) {
-        aiUrl.value = url.trim(); aiModel.value = model.trim(); aiKey.value = key.trim()
+        aiUrl.value = ThirdEyeAI.cleanUrl(url); aiModel.value = model.trim(); aiKey.value = key.trim()
         this.persona.value = persona.ifBlank { ThirdEyeAI.DEFAULT_PERSONA }
         prefs.edit().putString("aiUrl", aiUrl.value).putString("aiModel", aiModel.value)
             .putString("aiKey", aiKey.value).putString("persona", this.persona.value).apply()
@@ -211,9 +220,9 @@ object ChronosEngine {
         (en.firstOrNull { it.name == saved } ?: en.firstOrNull())?.let { applyVoice(it) }
         t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
-            override fun onDone(id: String?) { main.post { if (id == "pcl$utt") finishSpeaking() } }
+            override fun onDone(id: String?) { main.post { if (id == "pcl$utt" && speaking) finishSpeaking() } }
             @Deprecated("Deprecated in Java")
-            override fun onError(id: String?) { main.post { if (id == "pcl$utt") finishSpeaking() } }
+            override fun onError(id: String?) { main.post { if (id == "pcl$utt" && speaking) finishSpeaking() } }
         })
         ttsReady = true
     }
@@ -243,7 +252,7 @@ object ChronosEngine {
     private fun speak(text: String) {
         main.removeCallbacks(fire); main.removeCallbacks(restartRun); main.removeCallbacks(watchdog)
         destroyRecognizer()
-        if (text.isNotBlank()) lastReply.value = text
+        if (text.isNotBlank()) { lastReply.value = text; lastSpoken = norm(text) }
         speaking = true
         phase.value = Phase.SPEAKING
         val t = tts
@@ -259,9 +268,11 @@ object ChronosEngine {
 
     private fun finishSpeaking() {
         main.removeCallbacks(speakGuard)
+        if (!speaking) return
         speaking = false
+        lastSpeechEnd = SystemClock.elapsedRealtime()
         phase.value = Phase.STANDBY
-        listen()
+        restartSoon(350)                          // let the speaker tail die out so she doesn't hear herself
     }
 
     /** "quiet" command / stop button. */
@@ -288,7 +299,7 @@ object ChronosEngine {
         main.postDelayed(r, ms)
     }
     fun cancelTimer() { timerRuns.values.forEach { main.removeCallbacks(it) }; timerRuns.clear(); timers.value = emptyList() }
-    fun timerLeftMs(): Long { val end = timers.value.minOfOrNull { it.endAt } ?: return 0L; return end - SystemClock.elapsedRealtime() }
+    fun timerLeftMs(): Long = (timers.value.minOfOrNull { it.endAt } ?: return 0L) - SystemClock.elapsedRealtime()
 
     // ---- idle auto-disengage ----
     private fun bumpIdle() {
@@ -318,6 +329,7 @@ object ChronosEngine {
 
     /** One stateless question: nothing but the persona and this question is sent. Also used by "ask ...". */
     fun ask(q: String) {
+        if (thinking) return                                   // one question at a time
         bumpIdle()
         handled = true
         main.removeCallbacks(fire); main.removeCallbacks(restartRun); main.removeCallbacks(watchdog)
@@ -325,11 +337,43 @@ object ChronosEngine {
         thinking = true
         phase.value = Phase.THINKING
         chat.value = (chat.value + Msg(true, q)).takeLast(60)
+        if (!isOnline()) {
+            // no point trying: say so straight away
+            val msg = "You are offline. Turn on Wi-Fi or mobile data."
+            thinking = false
+            chat.value = (chat.value + Msg(false, msg)).takeLast(60)
+            speak(msg); return
+        }
         ThirdEyeAI.ask(aiUrl.value, aiModel.value, aiKey.value, persona.value, q) { r ->
             thinking = false
-            val text = r.fold({ cleanForSpeech(it).ifBlank { "I have no answer for that" } }, { aiError(it) })
-            chat.value = (chat.value + Msg(false, text)).takeLast(60)
-            if (running || ttsReady) { speak(text) } else { phase.value = Phase.STANDBY }
+            val spoken = r.fold({ cleanForSpeech(it).ifBlank { "I have no answer for that" } }, { aiError(it) })
+            // the chat shows the real technical reason too, so a failure can actually be diagnosed
+            val shown = r.fold({ spoken }, { e -> spoken + ((e as? AiException)?.detail?.let { "\n⚠ $it" } ?: "") })
+            chat.value = (chat.value + Msg(false, shown)).takeLast(60)
+            speak(spoken)
+        }
+    }
+
+    /** True if Android reports a connection that can reach the internet. */
+    fun isOnline(): Boolean {
+        val c = ctx ?: return true
+        return runCatching {
+            val cm = c.getSystemService(android.net.ConnectivityManager::class.java)
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+            caps != null && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }.getOrDefault(true)
+    }
+
+    /** Connection test for the System screen: shows the exact result as text, no speech, no chat. */
+    fun testAi(onResult: (String) -> Unit) {
+        if (!isOnline()) { onResult("✗ Phone reports no internet connection."); return }
+        val t0 = SystemClock.elapsedRealtime()
+        ThirdEyeAI.ask(aiUrl.value, aiModel.value, aiKey.value, persona.value, "Reply with the single word: ready") { r ->
+            val ms = SystemClock.elapsedRealtime() - t0
+            onResult(r.fold(
+                { "✓ Connected in ${ms} ms. Reply: " + it.take(80) },
+                { e -> "✗ " + ((e as? AiException)?.let { "${it.kind}: ${it.detail}" } ?: (e.message ?: "failed")) }
+            ))
         }
     }
 
@@ -341,6 +385,8 @@ object ChronosEngine {
         AiException.Kind.BAD_KEY -> "My network core rejected the key. Check it in System."
         AiException.Kind.LIMIT -> "I have hit my usage limit. Try again shortly, or switch provider in System."
         AiException.Kind.SERVER -> "My network core returned an error. Please try again."
+        AiException.Kind.BAD_URL -> "The A.I. address looks wrong. Check the endpoint and model in System."
+        AiException.Kind.BAD_REPLY -> "My network core sent a reply I couldn't read. Try again, or try another model."
         else -> "I can't reach my network core. Check your internet connection."
     }
 
@@ -349,6 +395,7 @@ object ChronosEngine {
         var t = s.lowercase(Locale.US).replace("a.m.", "am").replace("p.m.", "pm")
         t = t.replace(Regex("""(?<!\d)\.|\.(?!\d)"""), " ").replace(Regex("""[,!?;:"“”]"""), " ")
         t = NORM.fold(t) { a, (f, r) -> a.replace(f, r) }
+        t = t.replace(Regex("""\bthird i\b"""), "third eye")
         return t.replace(Regex("""\s+"""), " ").trim()
     }
 
@@ -377,6 +424,8 @@ object ChronosEngine {
         lastHeard.value = raw.first()
         val alts = raw.map { norm(it) }.filter { it.isNotBlank() }
         if (alts.isEmpty()) return false
+        // just finished talking and this is part of what she said: it's her own echo, not the user
+        if (SystemClock.elapsedRealtime() - lastSpeechEnd < 1500 && lastSpoken.isNotEmpty() && lastSpoken.contains(alts.first())) return false
         val a = decide(raw, alts, final) ?: return false
         pending = a
         main.removeCallbacks(fire)

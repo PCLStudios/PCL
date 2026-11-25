@@ -3,6 +3,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 enum class Screen { HOME, EYE, NOTES, HELP, VOICE, SYSTEM }
 object ChronosEngine {
     val log = ArrayList<String>()
+    @Volatile var appVisible = true
     val locked = MutableStateFlow(false); val combat = MutableStateFlow(false); val quantum = MutableStateFlow(false)
     val whisper = MutableStateFlow(false); val thirdEye = MutableStateFlow(false); val torch = MutableStateFlow(false)
     val lastReply = MutableStateFlow(""); val tab = MutableStateFlow(Screen.HOME); val notes = MutableStateFlow<List<String>>(emptyList()); val rate = MutableStateFlow(1f)

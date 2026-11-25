@@ -129,7 +129,7 @@ fun HomeScreen() {
                 timers.forEach { t ->
                     val s = ((t.endAt - now) / 1000).coerceAtLeast(0)
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text2("%02d:%02d".format(s / 60, s % 60), C.Amber, 18, bold = true)
+                        Text2("%02d:%02d".format(java.util.Locale.US, s / 60, s % 60), C.Amber, 18, bold = true)
                         Text2(t.label.ifBlank { "timer" }, C.Soft, 13, mono = false, modifier = Modifier.padding(start = 12.dp).weight(1f), maxLines = 1)
                     }
                 }
@@ -260,7 +260,7 @@ fun EyeScreen() {
     val model by ChronosEngine.aiModel.collectAsState()
     val list = rememberLazyListState()
     var text by remember { mutableStateOf("") }
-    val provider = ThirdEyeAI.PROVIDERS.firstOrNull { it.url.trimEnd('/') == url.trimEnd('/') }
+    val provider = ThirdEyeAI.providerFor(url)
 
     LaunchedEffect(chat.size, phase) { if (chat.isNotEmpty()) list.animateScrollToItem(chat.size - 1) }
 

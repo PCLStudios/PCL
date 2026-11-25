@@ -1,8 +1,25 @@
 # PCL handoff (for the next AI / session)
 
-Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Package `com.pcl.chronoslock`. Version 0.3.0.
+Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Package `com.pcl.chronoslock`. Version 0.3.1.
 User's goal: always-listening voice assistant "Chronos Lock" with combat/quantum modes, many voice commands, whisper
 understanding, fuzzy wake word, session-style locking, an online chatbot ("Third Eye"), and a nicer side-panel UI.
+
+## v0.3.1 changes (bug-fix release)
+Reported by user: Third Eye said it "can't reach my network core" + assorted minor bugs.
+- ThirdEye.kt rewritten: ANY failure used to be reported as a network error (incl. JSON parse errors). Now every failure has a
+  kind + real technical detail (DNS, timeout, SSL, HTTP code + provider error text, unreadable reply). The detail is shown in the
+  chat bubble (⚠ line) and in System > TEST (inline result, no speech). One automatic retry on dropped connections.
+  Also: URL cleaning (adds https://, strips pasted /chat/completions), User-Agent/Accept headers, 60 s read timeout,
+  tolerant reply parsing (null/array content), offline pre-check in ChronosEngine.isOnline().
+- Manifest: usesCleartextTraffic=true (plain http:// Ollama/LAN presets were blocked by Android => looked like a network error);
+  REQUEST_IGNORE_BATTERY_OPTIMIZATIONS (System button now opens the one-tap dialog; without it Doze cuts network/mic with screen off).
+- Engine: she no longer hears her own voice (350 ms restart delay + echo filter); stop()/start() reset stale flags; start() is
+  idempotent (activity re-sent it and restarted the mic); finishSpeaking guarded against double calls (hush); one A.I. question at a time.
+- Commands: free-text commands (note/say/ask/spell/remind/search) now beat keyword commands ("take a note about the timer");
+  "scan/status/report/quote/coin/skip" need whole words (fewer false triggers); Third Eye close phrases only when the utterance is short;
+  "third i" normalisation fixed; app-launching commands now say so honestly when PCL is not on screen (ChronosEngine.appVisible).
+- Locale.US used for timer/pitch formatting.
+- Re-verified on JVM: Commands 57/57 routing (incl. new cases), ThirdEye.kt type-checks. Engine/Compose still NOT compiled locally.
 
 ## State: all requested features are WRITTEN but the APK has NOT been built
 No Android SDK / Gradle network in the authoring sandbox. What WAS verified on a plain JVM (see devtests/):
