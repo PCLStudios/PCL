@@ -288,7 +288,7 @@ object ChronosEngine {
         main.postDelayed(r, ms)
     }
     fun cancelTimer() { timerRuns.values.forEach { main.removeCallbacks(it) }; timerRuns.clear(); timers.value = emptyList() }
-    fun timerLeftMs(): Long = (timers.value.minOfOrNull { it.endAt } ?: return 0L) - SystemClock.elapsedRealtime()
+    fun timerLeftMs(): Long { val end = timers.value.minOfOrNull { it.endAt } ?: return 0L; return end - SystemClock.elapsedRealtime() }
 
     // ---- idle auto-disengage ----
     private fun bumpIdle() {
