@@ -1,15 +1,20 @@
 package com.pcl.chronoslock
 
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.os.SystemClock
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,153 +22,343 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
+import kotlin.math.abs
+import kotlin.math.sin
 
-private val Bg = Color(0xFF05070D)
-private val Cyan = Color(0xFF22E4FF)
-private val Dim = Color(0xFF3A4660)
-private val Soft = Color(0xFF8A97B5)
-private val Mono = FontFamily.Monospace
+// ============================ HOME ============================
 
 @Composable
-fun PclApp() {
-    val ctx = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
-        if (r[Manifest.permission.RECORD_AUDIO] == true) startChronosService(ctx)
-    }
-    LaunchedEffect(Unit) {
-        val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) startChronosService(ctx) else {
-            val perms = buildList {
-                add(Manifest.permission.RECORD_AUDIO)
-                if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            }.toTypedArray()
-            launcher.launch(perms)
-        }
-    }
-    val tab by ChronosEngine.tab.collectAsState()
-    Column(Modifier.fillMaxSize().background(Bg)) {
-        Column(Modifier.weight(1f)) {
-            when (tab) { 0 -> HomeScreen(); 1 -> HelpScreen(); else -> SettingsScreen() }
-        }
-        Row(Modifier.fillMaxWidth().background(Color(0xFF080C16)).padding(vertical = 6.dp)) {
-            listOf("HOME", "HELP", "VOICE").forEachIndexed { i, l ->
-                Text(
-                    l, Modifier.weight(1f).clickable { ChronosEngine.tab.value = i }.padding(12.dp),
-                    color = if (i == tab) Cyan else Dim, textAlign = TextAlign.Center,
-                    fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp
-                )
-            }
-        }
-    }
-}
+fun HomeScreen() {
+    val locked by ChronosEngine.locked.collectAsState()
+    val combat by ChronosEngine.combat.collectAsState()
+    val quantum by ChronosEngine.quantum.collectAsState()
+    val whisper by ChronosEngine.whisper.collectAsState()
+    val eye by ChronosEngine.thirdEye.collectAsState()
+    val torch by ChronosEngine.torch.collectAsState()
+    val phase by ChronosEngine.phase.collectAsState()
+    val heard by ChronosEngine.lastHeard.collectAsState()
+    val reply by ChronosEngine.lastReply.collectAsState()
+    val timers by ChronosEngine.timers.collectAsState()
 
-@Composable
-fun HelpScreen() {
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        item {
-            Spacer(Modifier.height(24.dp))
-            Text("COMMANDS", color = Cyan, fontFamily = Mono, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Say “Chronos Lock” and wait for “Listening”, then give a command — or say it all at once, " +
-                    "like “Chronos Lock, combat mode”. ${Commands.all.size} commands active.",
-                color = Soft, fontSize = 13.sp
-            )
-        }
-        items(Commands.all) { c ->
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(Cyan.copy(alpha = 0.05f))
-                    .border(1.dp, Dim, RoundedCornerShape(14.dp)).padding(14.dp)
-            ) {
-                Text("“Chronos Lock, ${c.phrase}”", color = Cyan, fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Text(c.help, color = Soft, fontSize = 12.sp)
-            }
-        }
-        item { Spacer(Modifier.height(16.dp)) }
-    }
-}
-
-@Composable
-private fun Action(text: String, onClick: () -> Unit) {
-    Text(
-        text, Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(14.dp))
-            .border(1.dp, Cyan, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(14.dp),
-        color = Cyan, textAlign = TextAlign.Center, fontFamily = Mono, fontSize = 13.sp, letterSpacing = 1.sp
-    )
-}
-
-@Composable
-fun SettingsScreen() {
-    val ctx = LocalContext.current
-    val voices by ChronosEngine.voices.collectAsState()
-    val sel by ChronosEngine.voiceName.collectAsState()
-    val pitch by ChronosEngine.pitch.collectAsState()
-    val rate by ChronosEngine.rate.collectAsState()
-    val colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan, inactiveTrackColor = Dim)
-
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Spacer(Modifier.height(4.dp))
-        Text("VOICE", color = Cyan, fontFamily = Mono, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Tap a voice to hear it. ♀ marks likely female voices; “online” ones are Google's neural voices " +
-                "and sound the most human.", color = Soft, fontSize = 13.sp
-        )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.height(8.dp))
+        LockButton(locked, phase) { ChronosEngine.toggleLock() }
         Spacer(Modifier.height(10.dp))
-        voices.forEach { v ->
-            Row(
-                Modifier.fillMaxWidth().clickable { ChronosEngine.setVoice(v.name) }.padding(vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(v.label, Modifier.weight(1f), color = if (v.name == sel) Cyan else Soft, fontFamily = Mono, fontSize = 12.sp)
-                if (v.name == sel) Text("●", color = Cyan)
+
+        val (status, col) = when {
+            phase == Phase.SPEAKING -> "SPEAKING" to C.Violet
+            phase == Phase.THINKING -> "THINKING…" to C.Amber
+            eye -> "THIRD EYE · TALK TO ME" to C.Violet
+            locked && whisper -> "ENGAGED · WHISPER MODE" to C.Green
+            locked -> "ENGAGED · SAY A COMMAND" to C.Green
+            whisper -> "STANDBY · WHISPER “CHRONOS LOCK”" to C.Soft
+            else -> "STANDBY · SAY “CHRONOS LOCK”" to C.Soft
+        }
+        Text2(status, col, 13, bold = true, spacing = 2, align = TextAlign.Center)
+        Spacer(Modifier.height(10.dp))
+        WaveBars(phase, if (locked) C.Green else C.Cyan)
+        Spacer(Modifier.height(10.dp))
+
+        Panel {
+            Text2("HEARD", C.Dim, 10, spacing = 3)
+            Text2(if (heard.isBlank()) "—" else "“$heard”", C.Text, 13, maxLines = 2)
+            if (reply.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text2("REPLY", C.Dim, 10, spacing = 3)
+                Text2(reply, C.Soft, 13, mono = false, maxLines = 3)
+            }
+            if (phase == Phase.SPEAKING) {
+                Spacer(Modifier.height(10.dp))
+                PillButton("■  HUSH", C.Violet, modifier = Modifier.fillMaxWidth()) { ChronosEngine.hush() }
             }
         }
-        if (voices.isEmpty()) Text("No voices found yet — install Google Speech Services below.", color = Soft, fontSize = 12.sp)
 
         Spacer(Modifier.height(14.dp))
-        Text("PITCH  %.2f".format(pitch), color = Soft, fontFamily = Mono, fontSize = 12.sp)
-        Slider(pitch, { ChronosEngine.setPitch(it) }, valueRange = 0.7f..1.4f, colors = colors,
-            onValueChangeFinished = { ChronosEngine.preview() })
-        Text("SPEED  %.2f".format(rate), color = Soft, fontFamily = Mono, fontSize = 12.sp)
-        Slider(rate, { ChronosEngine.setRate(it) }, valueRange = 0.7f..1.3f, colors = colors,
-            onValueChangeFinished = { ChronosEngine.preview() })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ModeCard("COMBAT MODE", Icons.Filled.Warning, C.Red, combat, locked, Modifier.weight(1f)) { ChronosEngine.toggleCombat() }
+            ModeCard("QUANTUM FOCUS", Icons.Filled.Star, C.Violet, quantum, locked, Modifier.weight(1f)) { ChronosEngine.toggleQuantum() }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Tile("WHISPER", if (whisper) "ON" else "OFF", "◌", C.Violet, whisper, Modifier.weight(1f)) { ChronosEngine.toggleWhisper() }
+            Tile("FLASHLIGHT", if (torch) "ON" else "OFF", "✦", C.Amber, torch, Modifier.weight(1f)) { ChronosEngine.toggleTorch() }
+            Tile("THIRD EYE", if (eye) "LIVE" else "OFF", "◉", C.Cyan, eye, Modifier.weight(1f)) { ChronosEngine.toggleEye() }
+        }
 
-        Action("▶  TEST VOICE") { ChronosEngine.preview() }
-        Action("RESET TO NATURAL (1.00 / 1.00)") { ChronosEngine.resetVoice() }
-        Action("GET MORE NATURAL VOICES") {
-            runCatching {
-                ctx.startActivity(Intent("com.android.settings.TTS_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        if (timers.isNotEmpty()) {
+            SectionLabel("TIMERS", timers.size)
+            var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+            LaunchedEffect(timers) { while (true) { now = SystemClock.elapsedRealtime(); delay(500) } }
+            Panel(accent = C.Amber) {
+                timers.forEach { t ->
+                    val s = ((t.endAt - now) / 1000).coerceAtLeast(0)
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text2("%02d:%02d".format(s / 60, s % 60), C.Amber, 18, bold = true)
+                        Text2(t.label.ifBlank { "timer" }, C.Soft, 13, mono = false, modifier = Modifier.padding(start = 12.dp).weight(1f), maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                PillButton("CANCEL ALL", C.Amber, modifier = Modifier.fillMaxWidth()) { ChronosEngine.cancelTimer() }
             }
+        }
+
+        SectionLabel("HOW IT WORKS")
+        Panel {
+            Text2("1.  Say “Chronos Lock” once. The button turns green.", C.Soft, 13, mono = false)
+            Spacer(Modifier.height(4.dp))
+            Text2("2.  Now just say commands: “combat mode”, “set a timer for five minutes”, “what time is it”.", C.Soft, 13, mono = false)
+            Spacer(Modifier.height(4.dp))
+            Text2("3.  Say “open third eye” to chat with the A.I. Say “close third eye” to leave.", C.Soft, 13, mono = false)
+            Spacer(Modifier.height(4.dp))
+            Text2("4.  Speaking quietly? Say “whisper mode”.", C.Soft, 13, mono = false)
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun LockButton(locked: Boolean, phase: Phase, onClick: () -> Unit) {
+    val color = if (locked) C.Green else C.Dim
+    val t = rememberInfiniteTransition(label = "fx")
+    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "pulse")
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(14000, easing = LinearEasing), RepeatMode.Restart), label = "spin")
+    val fast by t.animateFloat(360f, 0f, infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Restart), label = "fast")
+
+    Box(
+        Modifier.size(250.dp).clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val r = size.minDimension / 2
+            if (locked) {
+                drawCircle(color.copy(alpha = (1f - pulse) * 0.35f), radius = r * (0.62f + 0.38f * pulse), style = Stroke(2.dp.toPx()))
+                if (phase == Phase.SPEAKING || phase == Phase.THINKING)
+                    drawCircle(C.Violet.copy(alpha = 0.25f * (1f - pulse)), radius = r * (0.7f + 0.3f * pulse), style = Stroke(6.dp.toPx()))
+            }
+            rotate(if (locked) spin else 0f, Offset(center.x, center.y)) {
+                drawCircle(color.copy(alpha = 0.8f), radius = r * 0.88f,
+                    style = Stroke(3.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 14f))))
+            }
+            rotate(if (locked) fast else 0f, Offset(center.x, center.y)) {
+                drawCircle(color.copy(alpha = 0.5f), radius = r * 0.74f,
+                    style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 22f))))
+            }
+            drawCircle(brush = Brush.radialGradient(listOf(color.copy(alpha = if (locked) 0.38f else 0.08f), Color.Transparent)), radius = r * 0.72f)
+            drawCircle(color, radius = r * 0.6f, style = Stroke(if (locked) 5.dp.toPx() else 3.dp.toPx()))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Filled.Lock, null, tint = color, modifier = Modifier.size(60.dp))
+            Spacer(Modifier.height(8.dp))
+            Text2(if (locked) "ENGAGED" else "DISENGAGED", color, 13, bold = true, spacing = 3)
+            Text2(if (locked) "tap to disengage" else "tap or say “Chronos Lock”", C.Dim, 10, mono = false)
+        }
+    }
+}
+
+/** Live voice bars: follow the mic while listening, a gentle wave while she talks. */
+@Composable
+private fun WaveBars(phase: Phase, color: Color) {
+    val level by ChronosEngine.level.collectAsState()
+    val t = rememberInfiniteTransition(label = "wave")
+    val ph by t.animateFloat(0f, 6.2832f, infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart), label = "ph")
+    Canvas(Modifier.fillMaxWidth().height(44.dp)) {
+        val n = 31
+        val gap = size.width / n
+        for (i in 0 until n) {
+            val edge = 1f - abs(i - n / 2) / (n / 2f) * 0.75f
+            val amp = when (phase) {
+                Phase.LISTENING -> 0.06f + level * 0.94f * (0.55f + 0.45f * sin(ph + i * 0.6f))
+                Phase.SPEAKING -> 0.25f + 0.55f * abs(sin(ph * 1.3f + i * 0.45f))
+                Phase.THINKING -> 0.1f + 0.5f * abs(sin(ph - i * 0.35f)).let { it * it }
+                Phase.STANDBY -> 0.05f
+            }
+            val h = (size.height * amp * edge).coerceAtLeast(3.dp.toPx())
+            val x = gap * (i + 0.5f)
+            drawLine(color.copy(alpha = 0.35f + 0.65f * edge), Offset(x, size.height / 2 - h / 2), Offset(x, size.height / 2 + h / 2),
+                strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+        }
+    }
+}
+
+@Composable
+private fun ModeCard(label: String, icon: ImageVector, accent: Color, active: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = if (active) accent else C.Dim
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier.clip(shape).background(c.copy(alpha = if (active) 0.16f else 0.06f))
+            .border(1.dp, c.copy(alpha = 0.7f), shape).clickable(onClick = onClick).padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(icon, null, tint = c, modifier = Modifier.size(28.dp))
+        Spacer(Modifier.height(8.dp))
+        Text2(label, c, 12, bold = true, spacing = 1)
+        Text2(if (active) "ACTIVE" else if (enabled) "OFFLINE" else "LOCKED OUT", c.copy(alpha = 0.7f), 10)
+    }
+}
+
+@Composable
+private fun Tile(label: String, state: String, glyph: String, accent: Color, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = if (active) accent else C.Dim
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.clip(shape).background(c.copy(alpha = if (active) 0.16f else 0.05f))
+            .border(1.dp, c.copy(alpha = 0.6f), shape).clickable(onClick = onClick).padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text2(glyph, c, 22)
+        Spacer(Modifier.height(4.dp))
+        Text2(label, c, 10, bold = true, spacing = 1)
+        Text2(state, c.copy(alpha = 0.7f), 10)
+    }
+}
+
+// ============================ THIRD EYE ============================
+
+@Composable
+fun EyeScreen() {
+    val eye by ChronosEngine.thirdEye.collectAsState()
+    val chat by ChronosEngine.chat.collectAsState()
+    val phase by ChronosEngine.phase.collectAsState()
+    val key by ChronosEngine.aiKey.collectAsState()
+    val url by ChronosEngine.aiUrl.collectAsState()
+    val model by ChronosEngine.aiModel.collectAsState()
+    val list = rememberLazyListState()
+    var text by remember { mutableStateOf("") }
+    val provider = ThirdEyeAI.PROVIDERS.firstOrNull { it.url.trimEnd('/') == url.trimEnd('/') }
+
+    LaunchedEffect(chat.size, phase) { if (chat.isNotEmpty()) list.animateScrollToItem(chat.size - 1) }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text2(if (eye) "● CONNECTED" else "○ OFFLINE", if (eye) C.Violet else C.Dim, 13, bold = true, spacing = 2)
+                Text2("${provider?.name ?: "Custom"} · $model", C.Soft, 11)
+            }
+            if (chat.isNotEmpty()) { Chip("CLEAR", false) { ChronosEngine.clearChat() }; Spacer(Modifier.size(8.dp)) }
+            PillButton(if (eye) "DISCONNECT" else "CONNECT", if (eye) C.Red else C.Violet, filled = !eye) { ChronosEngine.toggleEye() }
+        }
+
+        if (key.isBlank() && provider?.needsKey == true) {
+            Panel(accent = C.Amber, modifier = Modifier.padding(bottom = 10.dp)) {
+                Text2("NEEDS A FREE A.I. KEY", C.Amber, 12, bold = true, spacing = 1)
+                Spacer(Modifier.height(4.dp))
+                Text2("Third Eye talks to an online chatbot. Get a free key in a minute and paste it under System.", C.Soft, 12, mono = false)
+                Spacer(Modifier.height(8.dp))
+                PillButton("OPEN SYSTEM", C.Amber) { ChronosEngine.tab.value = Screen.SYSTEM }
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (chat.isEmpty()) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(Modifier.height(28.dp))
+                    Text2("◉", C.Violet, 54)
+                    Spacer(Modifier.height(8.dp))
+                    Text2("THIRD EYE", C.Violet, 18, bold = true, spacing = 5)
+                    Spacer(Modifier.height(6.dp))
+                    Text2("Connect, then just talk — or type below. Every question is independent; nothing is remembered.", C.Soft, 13, mono = false, align = TextAlign.Center)
+                    Spacer(Modifier.height(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        listOf("Who are you?", "Explain black holes simply", "Give me a healthy dinner idea", "Tell me a fun fact about space").forEach {
+                            Chip(it, false, C.Violet) { ChronosEngine.askTyped(it) }
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize(), state = list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    itemsIndexed(chat) { _, m -> Bubble(m) }
+                    if (phase == Phase.THINKING) item { Text2("● thinking…", C.Amber, 12, modifier = Modifier.padding(start = 4.dp)) }
+                }
+            }
+        }
+
+        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val send = { if (text.isNotBlank()) { ChronosEngine.askTyped(text); text = "" } }
+            Field(text, { text = it }, "Type a question…", Modifier.weight(1f), imeAction = ImeAction.Send, onSubmit = send)
+            PillButton("SEND", C.Violet, filled = true) { send() }
+        }
+    }
+}
+
+@Composable
+private fun Bubble(m: Msg) {
+    val c = if (m.fromUser) C.Cyan else C.Violet
+    val shape = RoundedCornerShape(16.dp)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (m.fromUser) Arrangement.End else Arrangement.Start) {
+        Column(
+            Modifier.widthIn(max = 300.dp).clip(shape).background(c.copy(alpha = 0.12f)).border(1.dp, c.copy(alpha = 0.5f), shape).padding(12.dp)
+        ) {
+            Text2(if (m.fromUser) "YOU" else "THIRD EYE", c, 10, bold = true, spacing = 2)
+            Spacer(Modifier.height(3.dp))
+            Text2(m.text, C.Text, 14, mono = false)
+        }
+    }
+}
+
+// ============================ NOTES ============================
+
+@Composable
+fun NotesScreen() {
+    val notes by ChronosEngine.notes.collectAsState()
+    var text by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+        ScreenTitle("NOTES", "Say “take a note buy milk” and it lands here. “Read my notes” reads them out.")
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val add = { if (text.isNotBlank()) { ChronosEngine.addNote(text.trim()); text = "" } }
+            Field(text, { text = it }, "Add a note…", Modifier.weight(1f), onSubmit = add)
+            PillButton("ADD", C.Cyan, filled = true) { add() }
+        }
+        Spacer(Modifier.height(12.dp))
+        if (notes.isEmpty()) Text2("No notes yet.", C.Dim, 13, mono = false)
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            itemsIndexed(notes) { i, n ->
+                Panel {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text2(n, C.Text, 14, mono = false, modifier = Modifier.weight(1f))
+                        Text2("✕", C.Red, 16, modifier = Modifier.clickable { ChronosEngine.deleteNote(i) }.padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
+                    }
+                }
+            }
+        }
+        if (notes.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            PillButton("CLEAR ALL", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.clearNotes() }
         }
         Spacer(Modifier.height(16.dp))
     }

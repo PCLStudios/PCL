@@ -1,0 +1,23 @@
+import com.pcl.chronoslock.*
+fun check(name: String, got: Any?, want: Any?) = println((if (got == want) "ok   " else "FAIL ") + name + " -> " + got + (if (got == want) "" else "   (wanted $want)"))
+fun main() {
+    check("calc words", calc("what is five plus three"), "5 plus 3 is 8")
+    check("calc times", calc("what is twenty five times four"), "25 times 4 is 100")
+    check("calc div", calc("10 divided by 4"), "10 divided by 4 is 2.5")
+    check("calc div0", calc("5 divided by 0"), "I cannot divide by zero")
+    check("calc none", calc("set a timer for five minutes"), null)
+    check("timer 5 min", timerMs("set a timer for five minutes"), 300000L)
+    check("timer 90 sec", timerMs("timer 90 seconds"), 90000L)
+    check("timer twenty five min", timerMs("timer twenty five minutes"), 1500000L)
+    check("timer half hour", timerMs("timer for half an hour"), 1800000L)
+    check("timer no unit", timerMs("set a timer"), null)
+    check("human", human(3725000L), "1 hour 2 minutes")
+    check("human 1 min", human(60000L), "1 minute")
+    check("clock 7 30 pm", parseClock("set an alarm for seven thirty p m"), 19 to 30)
+    check("clock 7:30 am", parseClock("alarm for 7 30 am"), 7 to 30)
+    check("clock 14", parseClock("alarm at 14 15"), 14 to 15)
+    check("clock 12 am", parseClock("alarm 12 am"), 0 to 0)
+    println(parseClock("set an alarm for 6"))
+    check("clockText", clockText(19, 5), "7:05 PM")
+    check("digitize", digitize("volume seventy percent"), "volume 70 percent")
+}

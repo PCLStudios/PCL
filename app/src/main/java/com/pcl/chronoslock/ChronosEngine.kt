@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -13,35 +14,67 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.json.JSONArray
 import java.util.Locale
 
-enum class Phase { STANDBY, LISTENING, SPEAKING }
+enum class Phase { STANDBY, LISTENING, SPEAKING, THINKING }
+enum class Screen(val label: String, val glyph: String) {
+    HOME("HOME", "◎"), EYE("THIRD EYE", "◉"), NOTES("NOTES", "✎"), HELP("COMMANDS", "☰"), VOICE("VOICE", "♪"), SYSTEM("SYSTEM", "⚙")
+}
 data class VoiceOpt(val name: String, val label: String)
+data class Msg(val fromUser: Boolean, val text: String)
+data class TimerItem(val id: Int, val endAt: Long, val label: String)
 
-/** Wake word + commands + natural female TTS + app state. Call on the main thread. */
+/**
+ * Brain of PCL. Rules:
+ *  - Saying "Chronos Lock" (fuzzy matched, see Wake) engages the session. While engaged, commands work
+ *    WITHOUT the wake word (short phrases only, so chatter isn't mistaken for commands).
+ *  - While disengaged, everything is ignored except the wake word (optionally followed by a command).
+ *  - Third Eye mode sends every spoken sentence to the online chatbot (stateless: no history is sent).
+ *  - Whisper mode: online recognition, longer silence window, looser wake matching, quiet replies.
+ * Call on the main thread.
+ */
 object ChronosEngine {
 
-    private const val DEBOUNCE_MS = 600L
-    private const val AWAIT_TIMEOUT_MS = 8000L
-    private val WAKE = Regex("""\b(chronos|kronos|cronos|chrono|chronus)[\s-]*(lock|clock|luck|lark)\b""")
+    private const val MAX_WORDS = 8          // un-prefixed commands must be short, so chatter isn't mistaken for commands
     private val FEMALE = listOf("female", "-sfg-", "-tpf-", "-tpc-", "-iob-")
-    private val NORM = listOf("dis engage" to "disengage", "de activate" to "deactivate",
-        "quantumn" to "quantum", "quantam" to "quantum", "com bat" to "combat")
+    private val NORM = listOf("dis engage" to "disengage", "de activate" to "deactivate", "quantumn" to "quantum",
+        "quantam" to "quantum", "quantom" to "quantum", "com bat" to "combat", "fird eye" to "third eye",
+        "turd eye" to "third eye", "thirdeye" to "third eye", "third i " to "third eye ", "flash light" to "flashlight",
+        "whisperer" to "whisper", "wi-fi" to "wifi", "wi fi" to "wifi")
 
     // ---- UI state ----
     val locked = MutableStateFlow(false)
     val combat = MutableStateFlow(false)
     val quantum = MutableStateFlow(false)
+    val whisper = MutableStateFlow(false)
+    val thirdEye = MutableStateFlow(false)
+    val torch = MutableStateFlow(false)
     val phase = MutableStateFlow(Phase.STANDBY)
+    val level = MutableStateFlow(0f)               // mic loudness 0..1 for the visualiser
     val lastHeard = MutableStateFlow("")
-    val tab = MutableStateFlow(0)
+    val lastReply = MutableStateFlow("")
+    val tab = MutableStateFlow(Screen.HOME)
+    val chat = MutableStateFlow<List<Msg>>(emptyList())
+    val notes = MutableStateFlow<List<String>>(emptyList())
+    val timers = MutableStateFlow<List<TimerItem>>(emptyList())
     val voices = MutableStateFlow<List<VoiceOpt>>(emptyList())
     val voiceName = MutableStateFlow("")
-    val pitch = MutableStateFlow(1.0f)   // 1.0 / 1.0 = natural
+    val pitch = MutableStateFlow(1.0f)
     val rate = MutableStateFlow(1.0f)
+    val sessionMin = MutableStateFlow(0)           // auto-disengage after N idle minutes; 0 = never
+    val aiUrl = MutableStateFlow(ThirdEyeAI.DEFAULT_URL)
+    val aiModel = MutableStateFlow(ThirdEyeAI.DEFAULT_MODEL)
+    val aiKey = MutableStateFlow("")
+    val persona = MutableStateFlow(ThirdEyeAI.DEFAULT_PERSONA)
 
     // ---- internals ----
-    private class Pending(val cmd: Cmd?)
+    private sealed class Act {
+        object Wake : Act()
+        class Run(val cmd: Cmd?, val body: String) : Act()
+        class Ask(val q: String) : Act()
+        object CloseEye : Act()
+    }
     private val main = Handler(Looper.getMainLooper())
     private var ctx: Context? = null
     private lateinit var prefs: SharedPreferences
@@ -50,19 +83,30 @@ object ChronosEngine {
     private var recognizer: SpeechRecognizer? = null
     private var running = false
     private var speaking = false
-    private var awaitingCommand = false
+    private var thinking = false
     private var handled = false
-    private var pending: Pending? = null
+    private var pending: Act? = null
+    private var session = 0                 // ignores callbacks from recognisers we already replaced
+    private var utt = 0
+    private var errorStreak = 0
+    private var onlineBroken = false        // online recognition failed (no network): fall back to offline
+    private var offlineMissing = false      // offline model not installed: use online
+    private var nextTimerId = 1
+    private val timerRuns = HashMap<Int, Runnable>()
 
     private val fire = Runnable {
-        val p = pending ?: return@Runnable
+        val a = pending ?: return@Runnable
         pending = null
-        if (!handled && !speaking) execute(p.cmd)
+        if (!handled && !speaking && !thinking) execute(a)
     }
     private val restartRun = Runnable { listen() }
-    private val awaitTimeout = Runnable {
-        awaitingCommand = false
-        if (!speaking) phase.value = Phase.STANDBY
+    private val watchdog = Runnable { if (running && !speaking && !thinking) listen() }   // recogniser hung: restart it
+    private val speakGuard = Runnable { if (speaking) finishSpeaking() }                 // TTS never called back
+    private val idleRun = Runnable {
+        if (locked.value) {
+            locked.value = false; thirdEye.value = false
+            speak("Chronos Lock timed out. Standing by")
+        }
     }
 
     // ---- lifecycle ----
@@ -72,35 +116,81 @@ object ChronosEngine {
         prefs = ctx!!.getSharedPreferences("pcl", Context.MODE_PRIVATE)
         pitch.value = prefs.getFloat("pitch", 1.0f)
         rate.value = prefs.getFloat("rate", 1.0f)
+        whisper.value = prefs.getBoolean("whisper", false)
+        sessionMin.value = prefs.getInt("sessionMin", 0)
+        aiUrl.value = prefs.getString("aiUrl", ThirdEyeAI.DEFAULT_URL) ?: ThirdEyeAI.DEFAULT_URL
+        aiModel.value = prefs.getString("aiModel", ThirdEyeAI.DEFAULT_MODEL) ?: ThirdEyeAI.DEFAULT_MODEL
+        aiKey.value = prefs.getString("aiKey", "") ?: ""
+        persona.value = prefs.getString("persona", ThirdEyeAI.DEFAULT_PERSONA) ?: ThirdEyeAI.DEFAULT_PERSONA
+        notes.value = runCatching {
+            val a = JSONArray(prefs.getString("notes", "[]")); List(a.length()) { a.getString(it) }
+        }.getOrDefault(emptyList())
         tts = TextToSpeech(ctx) { s -> if (s == TextToSpeech.SUCCESS) onTtsReady() }
     }
 
-    fun start() { running = true; main.post { if (!speaking) listen() } }
+    fun start() { running = true; main.post { if (!speaking && !thinking) listen() } }
 
     fun stop() {
         running = false
         pending = null
         main.removeCallbacksAndMessages(null)
+        timerRuns.clear(); timers.value = emptyList()
         destroyRecognizer()
         phase.value = Phase.STANDBY
     }
 
     // ---- button actions ----
+    private fun needLock(): Boolean {
+        if (locked.value) return false
+        say("Chronos Lock is not engaged. Say Chronos Lock first"); return true
+    }
     fun toggleLock() {
-        locked.value = !locked.value
-        say(if (locked.value) "Chronos Lock Engaged" else "Chronos Lock Disengaged")
+        if (locked.value) {
+            locked.value = false; thirdEye.value = false
+            main.removeCallbacks(idleRun)
+            say("Chronos Lock Disengaged")
+        } else { locked.value = true; bumpIdle(); say("Chronos Lock Engaged") }
     }
     fun toggleCombat() {
-        combat.value = !combat.value
+        if (needLock()) return
+        bumpIdle(); combat.value = !combat.value
         say(if (combat.value) "Combat mode has been engaged" else "Combat mode has been disengaged")
     }
     fun toggleQuantum() {
-        quantum.value = !quantum.value
+        if (needLock()) return
+        bumpIdle(); quantum.value = !quantum.value
         say(if (quantum.value) "Quantum focus has been approved" else "Quantum focus has been disengaged")
     }
+    fun toggleWhisper() {
+        setWhisper(!whisper.value)
+        say(if (whisper.value) "Whisper mode enabled. I am listening closely" else "Whisper mode disabled")
+    }
+    fun toggleTorch() {
+        val c = ctx ?: return
+        if (!com.pcl.chronoslock.torch(c, !torch.value)) say("Flashlight unavailable")
+    }
+    fun toggleEye() { if (thirdEye.value) say(closeEye()) else say(openEye()) }
+    fun allOff() { locked.value = false; combat.value = false; quantum.value = false; thirdEye.value = false; main.removeCallbacks(idleRun) }
     fun preview() = say("Hello. I'm Chronos Lock. This is how I sound.")
 
-    // ---- voice settings ----
+    // ---- settings ----
+    fun setWhisper(on: Boolean) {
+        whisper.value = on
+        prefs.edit().putBoolean("whisper", on).apply()
+        if (running && !speaking && !thinking) restartSoon(100)   // re-open the mic with the new settings
+    }
+    fun setSessionMin(m: Int) { sessionMin.value = m; prefs.edit().putInt("sessionMin", m).apply(); bumpIdle() }
+    fun setAi(url: String, model: String, key: String, persona: String) {
+        aiUrl.value = url.trim(); aiModel.value = model.trim(); aiKey.value = key.trim()
+        this.persona.value = persona.ifBlank { ThirdEyeAI.DEFAULT_PERSONA }
+        prefs.edit().putString("aiUrl", aiUrl.value).putString("aiModel", aiModel.value)
+            .putString("aiKey", aiKey.value).putString("persona", this.persona.value).apply()
+    }
+    fun setPitch(v: Float) { pitch.value = v; prefs.edit().putFloat("pitch", v).apply() }
+    fun setRate(v: Float) { rate.value = v; prefs.edit().putFloat("rate", v).apply() }
+    fun resetVoice() { setPitch(1.0f); setRate(1.0f); preview() }
+
+    // ---- voices ----
     private fun female(v: Voice) = FEMALE.any { v.name.contains(it, true) }
 
     private fun label(v: Voice): String {
@@ -121,9 +211,9 @@ object ChronosEngine {
         (en.firstOrNull { it.name == saved } ?: en.firstOrNull())?.let { applyVoice(it) }
         t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
-            override fun onDone(id: String?) { main.post { finishSpeaking() } }
+            override fun onDone(id: String?) { main.post { if (id == "pcl$utt") finishSpeaking() } }
             @Deprecated("Deprecated in Java")
-            override fun onError(id: String?) { main.post { finishSpeaking() } }
+            override fun onError(id: String?) { main.post { if (id == "pcl$utt") finishSpeaking() } }
         })
         ttsReady = true
     }
@@ -137,122 +227,263 @@ object ChronosEngine {
     fun setVoice(name: String) {
         tts?.voices?.firstOrNull { it.name == name }?.let { applyVoice(it); preview() }
     }
-    fun setPitch(v: Float) { pitch.value = v; prefs.edit().putFloat("pitch", v).apply() }
-    fun setRate(v: Float) { rate.value = v; prefs.edit().putFloat("rate", v).apply() }
-    fun resetVoice() { setPitch(1.0f); setRate(1.0f); preview() }
 
-    // ---- speaking ----
-    private fun say(text: String) {
-        handled = true
-        awaitingCommand = false
-        main.removeCallbacks(fire)
-        main.removeCallbacks(awaitTimeout)
-        speak(text)
+    fun nextVoice(): String {
+        val l = voices.value
+        if (l.isEmpty()) return "No other voices are installed"
+        val n = (l.indexOfFirst { it.name == voiceName.value } + 1) % l.size
+        tts?.voices?.firstOrNull { it.name == l[n].name }?.let { applyVoice(it) }
+        return "Voice ${n + 1} of ${l.size}. How do I sound?"
     }
 
+    // ---- speaking ----
+    /** Speak and (afterwards) go back to listening. */
+    private fun say(text: String) { handled = true; speak(text) }
+
     private fun speak(text: String) {
-        main.removeCallbacks(fire)
-        main.removeCallbacks(restartRun)
+        main.removeCallbacks(fire); main.removeCallbacks(restartRun); main.removeCallbacks(watchdog)
         destroyRecognizer()
+        if (text.isNotBlank()) lastReply.value = text
         speaking = true
         phase.value = Phase.SPEAKING
         val t = tts
-        if (t == null || !ttsReady) { finishSpeaking(); return }
+        if (t == null || !ttsReady || text.isBlank()) { finishSpeaking(); return }
         t.setPitch(pitch.value)
         t.setSpeechRate(rate.value)
-        t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pcl")
+        val b = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, if (whisper.value) 0.35f else 1f) }
+        utt++
+        main.removeCallbacks(speakGuard)
+        main.postDelayed(speakGuard, 8000L + text.length * 90L)
+        t.speak(text, TextToSpeech.QUEUE_FLUSH, b, "pcl$utt")
     }
 
     private fun finishSpeaking() {
+        main.removeCallbacks(speakGuard)
         speaking = false
-        phase.value = if (awaitingCommand) Phase.LISTENING else Phase.STANDBY
-        if (awaitingCommand) {
-            main.removeCallbacks(awaitTimeout)
-            main.postDelayed(awaitTimeout, AWAIT_TIMEOUT_MS)
-        }
+        phase.value = Phase.STANDBY
         listen()
     }
 
-    // ---- command handling ----
-    private fun norm(s: String) = NORM.fold(s.lowercase(Locale.US)) { a, (f, t) -> a.replace(f, t) }
-
-    private fun execute(cmd: Cmd?) {
-        val reply = if (cmd == null) "Listening" else ctx?.let { cmd.run(it) } ?: "Done"
-        handled = true
-        main.removeCallbacks(fire)
-        main.removeCallbacks(awaitTimeout)
-        awaitingCommand = cmd == null
-        speak(reply)
+    /** "quiet" command / stop button. */
+    fun hush() {
+        tts?.stop()
+        if (speaking) finishSpeaking()
     }
 
-    private fun process(text: String?, final: Boolean) {
-        if (text.isNullOrBlank() || handled || speaking) return
-        lastHeard.value = text
-        val t = norm(text)
-        val wake = WAKE.find(t)
-        val body = when {
-            wake != null -> t.substring(wake.range.last + 1)
-            awaitingCommand -> t
-            else -> return
-        }
-        val cmd = Commands.all.firstOrNull { it.match(body) }
+    // ---- notes ----
+    fun addNote(text: String) { notes.value = notes.value + text; saveNotes() }
+    fun deleteNote(i: Int) { notes.value = notes.value.filterIndexed { n, _ -> n != i }; saveNotes() }
+    fun clearNotes() { notes.value = emptyList(); saveNotes() }
+    private fun saveNotes() { prefs.edit().putString("notes", JSONArray(notes.value).toString()).apply() }
 
-        if (cmd == null && awaitingCommand && wake == null) {
-            if (final) {
-                main.removeCallbacks(awaitTimeout)
-                if (body.isBlank()) { awaitingCommand = false; phase.value = Phase.STANDBY }
-                else say("Command not recognized")
-            }
-            return
+    // ---- timers & reminders (several at once) ----
+    fun setTimer(ms: Long, label: String) {
+        val id = nextTimerId++
+        timers.value = timers.value + TimerItem(id, SystemClock.elapsedRealtime() + ms, label)
+        val r = Runnable {
+            timers.value = timers.value.filter { it.id != id }; timerRuns.remove(id)
+            speak(if (label.isBlank()) "Your timer is finished" else "Reminder. $label")
         }
-        pending = Pending(cmd)
+        timerRuns[id] = r
+        main.postDelayed(r, ms)
+    }
+    fun cancelTimer() { timerRuns.values.forEach { main.removeCallbacks(it) }; timerRuns.clear(); timers.value = emptyList() }
+    fun timerLeftMs(): Long = (timers.value.minOfOrNull { it.endAt } ?: return 0L) - SystemClock.elapsedRealtime()
+
+    // ---- idle auto-disengage ----
+    private fun bumpIdle() {
+        main.removeCallbacks(idleRun)
+        val m = sessionMin.value
+        if (m > 0 && locked.value) main.postDelayed(idleRun, m * 60_000L)
+    }
+
+    // ---- Third Eye (online chatbot) ----
+    fun openEye(): String {
+        locked.value = true; thirdEye.value = true; tab.value = Screen.EYE; bumpIdle()
+        return "Third Eye connected. I'm listening. Ask me anything"
+    }
+    fun closeEye(): String {
+        thirdEye.value = false
+        if (tab.value == Screen.EYE) tab.value = Screen.HOME
+        return "Third Eye closed. Back to commands"
+    }
+    fun clearChat() { chat.value = emptyList() }
+
+    /** Typed question from the Third Eye screen. */
+    fun askTyped(q: String) {
+        if (q.isBlank()) return
+        if (!thirdEye.value) { locked.value = true; thirdEye.value = true }
+        ask(q.trim())
+    }
+
+    /** One stateless question: nothing but the persona and this question is sent. Also used by "ask ...". */
+    fun ask(q: String) {
+        bumpIdle()
+        handled = true
+        main.removeCallbacks(fire); main.removeCallbacks(restartRun); main.removeCallbacks(watchdog)
+        destroyRecognizer()
+        thinking = true
+        phase.value = Phase.THINKING
+        chat.value = (chat.value + Msg(true, q)).takeLast(60)
+        ThirdEyeAI.ask(aiUrl.value, aiModel.value, aiKey.value, persona.value, q) { r ->
+            thinking = false
+            val text = r.fold({ cleanForSpeech(it).ifBlank { "I have no answer for that" } }, { aiError(it) })
+            chat.value = (chat.value + Msg(false, text)).takeLast(60)
+            if (running || ttsReady) { speak(text) } else { phase.value = Phase.STANDBY }
+        }
+    }
+
+    private fun cleanForSpeech(s: String) = s.replace(Regex("""https?://\S+"""), "").replace(Regex("""[*_#`>~|]"""), "")
+        .replace(Regex("""\s+"""), " ").trim()
+
+    private fun aiError(e: Throwable): String = when ((e as? AiException)?.kind) {
+        AiException.Kind.NO_KEY -> "My network core needs an A.I. key. Open System, get a free key, and paste it in."
+        AiException.Kind.BAD_KEY -> "My network core rejected the key. Check it in System."
+        AiException.Kind.LIMIT -> "I have hit my usage limit. Try again shortly, or switch provider in System."
+        AiException.Kind.SERVER -> "My network core returned an error. Please try again."
+        else -> "I can't reach my network core. Check your internet connection."
+    }
+
+    // ---- command handling ----
+    private fun norm(s: String): String {
+        var t = s.lowercase(Locale.US).replace("a.m.", "am").replace("p.m.", "pm")
+        t = t.replace(Regex("""(?<!\d)\.|\.(?!\d)"""), " ").replace(Regex("""[,!?;:"“”]"""), " ")
+        t = NORM.fold(t) { a, (f, r) -> a.replace(f, r) }
+        return t.replace(Regex("""\s+"""), " ").trim()
+    }
+
+    private fun decide(raw: List<String>, alts: List<String>, final: Boolean): Act? {
+        if (thirdEye.value) {
+            if (alts.any { Commands.isEyeClose(it) }) return Act.CloseEye
+            return if (final) Act.Ask(raw.first().trim()) else null     // questions go out only when the sentence is complete
+        }
+        for (alt in alts) {
+            val toks = alt.split(" ")
+            val end = Wake.find(toks, whisper.value)
+            if (end >= 0) {
+                val body = toks.drop(end + 1).joinToString(" ")
+                return if (body.isBlank()) Act.Wake else Act.Run(Commands.match(body), body)
+            }
+        }
+        if (!locked.value) return null                                  // not engaged: ignore everything
+        val pick = alts.firstOrNull { Commands.match(it) != null } ?: return null
+        if (pick.split(" ").size > MAX_WORDS && !Commands.openEnded(pick)) return null
+        return Act.Run(Commands.match(pick), pick)
+    }
+
+    /** @return true if something was understood. */
+    private fun process(raw: List<String>, final: Boolean): Boolean {
+        if (raw.isEmpty() || handled || speaking || thinking) return false
+        lastHeard.value = raw.first()
+        val alts = raw.map { norm(it) }.filter { it.isNotBlank() }
+        if (alts.isEmpty()) return false
+        val a = decide(raw, alts, final) ?: return false
+        pending = a
         main.removeCallbacks(fire)
-        if (final) fire.run() else main.postDelayed(fire, DEBOUNCE_MS)
+        if (final) fire.run()
+        else {
+            val slow = whisper.value
+            // a bare "Chronos Lock" waits a little longer in case a command follows in the same breath
+            val d = if (a is Act.Wake) (if (slow) 1200L else 850L) else (if (slow) 800L else 550L)
+            main.postDelayed(fire, d)
+        }
+        return true
+    }
+
+    private fun execute(a: Act) {
+        val c = ctx ?: return
+        main.removeCallbacks(fire); pending = null
+        handled = true
+        bumpIdle()
+        when (a) {
+            Act.Wake -> {
+                val was = locked.value
+                locked.value = true; bumpIdle()
+                speak(if (was) "Yes? I'm listening" else "Chronos Lock Engaged")
+            }
+            is Act.Run -> {
+                val was = locked.value
+                locked.value = true                                    // a spoken wake word engages the session
+                val cmd = a.cmd
+                if (cmd == null) {
+                    bumpIdle()
+                    speak(if (was) "Command not recognized" else "Chronos Lock Engaged. Waiting for your command")
+                    return
+                }
+                Commands.body = a.body
+                val reply = runCatching { cmd.run(c) }.getOrElse { "That command failed" }
+                bumpIdle()
+                if (thinking) return                                   // an A.I. question took over
+                if (reply.isBlank()) restartSoon(100) else speak(reply)
+            }
+            is Act.Ask -> ask(a.q)
+            Act.CloseEye -> speak(closeEye())
+        }
     }
 
     // ---- recognition loop ----
-    private val listener = object : RecognitionListener {
-        override fun onPartialResults(b: Bundle?) = process(first(b), false)
+    private fun makeListener(id: Int) = object : RecognitionListener {
+        private fun all(b: Bundle?) = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+        override fun onPartialResults(b: Bundle?) { if (id == session) process(all(b), false) }
         override fun onResults(b: Bundle?) {
-            process(first(b), true)
-            if (!handled) restartSoon(150)
+            if (id != session) return
+            errorStreak = 0; onlineBroken = false
+            if (!process(all(b), true)) {
+                main.removeCallbacks(fire); pending = null
+                if (!handled && !speaking && !thinking) restartSoon(80)
+            }
         }
         override fun onError(error: Int) {
-            if (speaking || handled) return
+            if (id != session || speaking || handled || thinking) return
+            errorStreak++
             when (error) {
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> running = false
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
-                SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> restartSoon(1500)
-                else -> restartSoon(200)
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> { running = false; lastHeard.value = "Microphone permission needed"; phase.value = Phase.STANDBY }
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> { errorStreak = 0; restartSoon(60) }
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> restartSoon(1200)
+                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> { offlineMissing = true; restartSoon(300) }
+                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER -> { onlineBroken = true; restartSoon(1500) }
+                else -> restartSoon((200L * errorStreak).coerceAtMost(3000L))   // back off so a broken recogniser can't spin
             }
         }
         override fun onReadyForSpeech(p: Bundle?) {}
         override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onRmsChanged(rmsdB: Float) { if (id == session) level.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() {}
+        override fun onEndOfSpeech() { level.value = 0f }
         override fun onEvent(eventType: Int, params: Bundle?) {}
-        private fun first(b: Bundle?) = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
     }
 
     private fun listen() {
         val c = ctx ?: return
-        if (!running || speaking) return
-        if (!SpeechRecognizer.isRecognitionAvailable(c)) return
+        if (!running || speaking || thinking) return
+        if (!SpeechRecognizer.isRecognitionAvailable(c)) {
+            lastHeard.value = "No speech recogniser. Install Speech Services by Google"; phase.value = Phase.STANDBY; return
+        }
         destroyRecognizer()
         handled = false
+        val eye = thirdEye.value
+        val w = whisper.value
+        // Online is more accurate (needed for whispers and full sentences); offline is the fallback.
+        val online = (w || eye || offlineMissing) && !onlineBroken
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)           // alternatives: wake word is matched against all of them
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, c.packageName)
+            if (!online) putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, if (w) 2200L else if (eye) 1600L else 1100L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, if (w) 1800L else if (eye) 1300L else 900L)
+            if (w) putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500L)
         }
+        val id = ++session
+        phase.value = Phase.LISTENING
         recognizer = SpeechRecognizer.createSpeechRecognizer(c).also {
-            it.setRecognitionListener(listener)
+            it.setRecognitionListener(makeListener(id))
             it.startListening(intent)
         }
+        main.removeCallbacks(watchdog)
+        main.postDelayed(watchdog, 30_000L)
     }
 
     private fun restartSoon(delayMs: Long) {
@@ -261,7 +492,9 @@ object ChronosEngine {
     }
 
     private fun destroyRecognizer() {
+        session++                                  // anything the old recogniser still says is ignored
         recognizer?.let { runCatching { it.cancel(); it.destroy() } }
         recognizer = null
+        level.value = 0f
     }
 }
