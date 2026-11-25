@@ -2,6 +2,7 @@ package com.pcl.chronoslock
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -10,36 +11,40 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.util.Locale
 
 enum class Phase { STANDBY, LISTENING, SPEAKING }
-private enum class Cmd { WAKE_ONLY, COMBAT, QUANTUM, ENGAGE, DISENGAGE }
+data class VoiceOpt(val name: String, val label: String)
 
-/**
- * Core brain of PCL: wake word, voice commands, robotic female TTS, app state.
- * All methods must be called on the main thread.
- */
+/** Wake word + commands + natural female TTS + app state. Call on the main thread. */
 object ChronosEngine {
 
-    // ---- Tunables ----------------------------------------------------------
-    private const val VOICE_PITCH = 0.85f       // lower = more robotic
-    private const val VOICE_RATE = 0.92f
-    private const val WAKE_DEBOUNCE_MS = 700L   // wait for "combat mode" after "chronos lock"
-    private const val AWAIT_TIMEOUT_MS = 8000L  // wait for a command after "Listening"
+    private const val DEBOUNCE_MS = 600L
+    private const val AWAIT_TIMEOUT_MS = 8000L
     private val WAKE = Regex("""\b(chronos|kronos|cronos|chrono|chronus)[\s-]*(lock|clock|luck|lark)\b""")
-    private val FEMALE_HINTS = listOf("female", "-sfg-", "-tpf-", "-tpc-", "-iob-")
+    private val FEMALE = listOf("female", "-sfg-", "-tpf-", "-tpc-", "-iob-")
+    private val NORM = listOf("dis engage" to "disengage", "de activate" to "deactivate",
+        "quantumn" to "quantum", "quantam" to "quantum", "com bat" to "combat")
 
-    // ---- Observable state (UI) ---------------------------------------------
+    // ---- UI state ----
     val locked = MutableStateFlow(false)
     val combat = MutableStateFlow(false)
     val quantum = MutableStateFlow(false)
     val phase = MutableStateFlow(Phase.STANDBY)
     val lastHeard = MutableStateFlow("")
+    val tab = MutableStateFlow(0)
+    val voices = MutableStateFlow<List<VoiceOpt>>(emptyList())
+    val voiceName = MutableStateFlow("")
+    val pitch = MutableStateFlow(1.0f)   // 1.0 / 1.0 = natural
+    val rate = MutableStateFlow(1.0f)
 
-    // ---- Internals -----------------------------------------------------------
+    // ---- internals ----
+    private class Pending(val cmd: Cmd?)
     private val main = Handler(Looper.getMainLooper())
     private var ctx: Context? = null
+    private lateinit var prefs: SharedPreferences
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var recognizer: SpeechRecognizer? = null
@@ -47,45 +52,73 @@ object ChronosEngine {
     private var speaking = false
     private var awaitingCommand = false
     private var handled = false
+    private var pending: Pending? = null
 
-    private val wakeFire = Runnable { if (!handled && !speaking) execute(Cmd.WAKE_ONLY) }
+    private val fire = Runnable {
+        val p = pending ?: return@Runnable
+        pending = null
+        if (!handled && !speaking) execute(p.cmd)
+    }
     private val restartRun = Runnable { listen() }
     private val awaitTimeout = Runnable {
         awaitingCommand = false
         if (!speaking) phase.value = Phase.STANDBY
     }
 
-    // ---- Lifecycle -----------------------------------------------------------
+    // ---- lifecycle ----
     fun init(context: Context) {
         if (ctx != null) return
         ctx = context.applicationContext
-        tts = TextToSpeech(ctx) { status -> if (status == TextToSpeech.SUCCESS) onTtsReady() }
+        prefs = ctx!!.getSharedPreferences("pcl", Context.MODE_PRIVATE)
+        pitch.value = prefs.getFloat("pitch", 1.0f)
+        rate.value = prefs.getFloat("rate", 1.0f)
+        tts = TextToSpeech(ctx) { s -> if (s == TextToSpeech.SUCCESS) onTtsReady() }
     }
 
     fun start() { running = true; main.post { if (!speaking) listen() } }
 
     fun stop() {
         running = false
+        pending = null
         main.removeCallbacksAndMessages(null)
         destroyRecognizer()
         phase.value = Phase.STANDBY
     }
 
-    // ---- Public actions (buttons + voice share these) ----------------------------
-    fun toggleLock() = execute(if (locked.value) Cmd.DISENGAGE else Cmd.ENGAGE)
-    fun triggerCombat() = execute(Cmd.COMBAT)
-    fun triggerQuantum() = execute(Cmd.QUANTUM)
+    // ---- button actions ----
+    fun toggleLock() {
+        locked.value = !locked.value
+        say(if (locked.value) "Chronos Lock Engaged" else "Chronos Lock Disengaged")
+    }
+    fun toggleCombat() {
+        combat.value = !combat.value
+        say(if (combat.value) "Combat mode has been engaged" else "Combat mode has been disengaged")
+    }
+    fun toggleQuantum() {
+        quantum.value = !quantum.value
+        say(if (quantum.value) "Quantum focus has been approved" else "Quantum focus has been disengaged")
+    }
+    fun preview() = say("Hello. I'm Chronos Lock. This is how I sound.")
 
-    // ---- Voice ----------------------------------------------------------------
+    // ---- voice settings ----
+    private fun female(v: Voice) = FEMALE.any { v.name.contains(it, true) }
+
+    private fun label(v: Voice): String {
+        val net = if (v.isNetworkConnectionRequired) " (online)" else ""
+        return (if (female(v)) "♀ " else "") + v.locale.displayCountry.ifBlank { v.locale.language } +
+            " · " + v.name.removePrefix("en-").take(20) + net
+    }
+
     private fun onTtsReady() {
         val t = tts ?: return
         t.language = Locale.US
-        val voices = t.voices.orEmpty().filter { it.locale.language == "en" && !it.isNetworkConnectionRequired }
-        val pick = voices.firstOrNull { v -> FEMALE_HINTS.any { v.name.contains(it, true) } && v.locale == Locale.US }
-            ?: voices.firstOrNull { v -> FEMALE_HINTS.any { v.name.contains(it, true) } }
-        if (pick != null) t.voice = pick
-        t.setPitch(VOICE_PITCH)
-        t.setSpeechRate(VOICE_RATE)
+        val en = t.voices.orEmpty().filter { it.locale.language == "en" }.sortedWith(
+            compareByDescending<Voice> { female(it) }
+                .thenByDescending { it.locale == Locale.US }
+                .thenByDescending { it.quality })
+        voices.value = en.map { VoiceOpt(it.name, label(it)) }
+        val saved = prefs.getString("voice", null)
+        (en.firstOrNull { it.name == saved } ?: en.firstOrNull())?.let { applyVoice(it) }
         t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
             override fun onDone(id: String?) { main.post { finishSpeaking() } }
@@ -95,14 +128,38 @@ object ChronosEngine {
         ttsReady = true
     }
 
+    private fun applyVoice(v: Voice) {
+        tts?.voice = v
+        voiceName.value = v.name
+        prefs.edit().putString("voice", v.name).apply()
+    }
+
+    fun setVoice(name: String) {
+        tts?.voices?.firstOrNull { it.name == name }?.let { applyVoice(it); preview() }
+    }
+    fun setPitch(v: Float) { pitch.value = v; prefs.edit().putFloat("pitch", v).apply() }
+    fun setRate(v: Float) { rate.value = v; prefs.edit().putFloat("rate", v).apply() }
+    fun resetVoice() { setPitch(1.0f); setRate(1.0f); preview() }
+
+    // ---- speaking ----
+    private fun say(text: String) {
+        handled = true
+        awaitingCommand = false
+        main.removeCallbacks(fire)
+        main.removeCallbacks(awaitTimeout)
+        speak(text)
+    }
+
     private fun speak(text: String) {
-        main.removeCallbacks(wakeFire)
+        main.removeCallbacks(fire)
         main.removeCallbacks(restartRun)
         destroyRecognizer()
         speaking = true
         phase.value = Phase.SPEAKING
         val t = tts
         if (t == null || !ttsReady) { finishSpeaking(); return }
+        t.setPitch(pitch.value)
+        t.setSpeechRate(rate.value)
         t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "pcl")
     }
 
@@ -116,53 +173,44 @@ object ChronosEngine {
         listen()
     }
 
-    // ---- Command handling ----------------------------------------------------------
-    private fun parse(s: String): Cmd? = when {
-        "disengage" in s -> Cmd.DISENGAGE
-        "engage" in s -> Cmd.ENGAGE
-        "combat" in s -> Cmd.COMBAT
-        "quantum" in s || "quantam" in s || "focus" in s -> Cmd.QUANTUM
-        else -> null
-    }
+    // ---- command handling ----
+    private fun norm(s: String) = NORM.fold(s.lowercase(Locale.US)) { a, (f, t) -> a.replace(f, t) }
 
-    private fun execute(cmd: Cmd) {
+    private fun execute(cmd: Cmd?) {
+        val reply = if (cmd == null) "Listening" else ctx?.let { cmd.run(it) } ?: "Done"
         handled = true
-        main.removeCallbacks(wakeFire)
+        main.removeCallbacks(fire)
         main.removeCallbacks(awaitTimeout)
-        awaitingCommand = cmd == Cmd.WAKE_ONLY
-        when (cmd) {
-            Cmd.WAKE_ONLY -> speak("Listening")
-            Cmd.COMBAT -> { combat.value = true; speak("Combat mode has been engaged") }
-            Cmd.QUANTUM -> { quantum.value = true; speak("Quantum focus has been approved") }
-            Cmd.ENGAGE -> { locked.value = true; speak("Chronos Lock Engaged") }
-            Cmd.DISENGAGE -> { locked.value = false; speak("Chronos Lock Disengaged") }
-        }
+        awaitingCommand = cmd == null
+        speak(reply)
     }
 
     private fun process(text: String?, final: Boolean) {
         if (text.isNullOrBlank() || handled || speaking) return
         lastHeard.value = text
-        val t = text.lowercase(Locale.US)
+        val t = norm(text)
         val wake = WAKE.find(t)
+        val body = when {
+            wake != null -> t.substring(wake.range.last + 1)
+            awaitingCommand -> t
+            else -> return
+        }
+        val cmd = Commands.all.firstOrNull { it.match(body) }
 
-        if (awaitingCommand) {
-            val c = parse(if (wake != null) t.substring(wake.range.last + 1) else t)
-            when {
-                c != null -> execute(c)
-                final -> { awaitingCommand = false; main.removeCallbacks(awaitTimeout); phase.value = Phase.STANDBY }
+        if (cmd == null && awaitingCommand && wake == null) {
+            if (final) {
+                main.removeCallbacks(awaitTimeout)
+                if (body.isBlank()) { awaitingCommand = false; phase.value = Phase.STANDBY }
+                else say("Command not recognized")
             }
             return
         }
-        if (wake == null) return
-        val c = parse(t.substring(wake.range.last + 1))
-        when {
-            c != null -> execute(c)
-            final -> execute(Cmd.WAKE_ONLY)
-            else -> { main.removeCallbacks(wakeFire); main.postDelayed(wakeFire, WAKE_DEBOUNCE_MS) }
-        }
+        pending = Pending(cmd)
+        main.removeCallbacks(fire)
+        if (final) fire.run() else main.postDelayed(fire, DEBOUNCE_MS)
     }
 
-    // ---- Speech recognition loop -------------------------------------------------------
+    // ---- recognition loop ----
     private val listener = object : RecognitionListener {
         override fun onPartialResults(b: Bundle?) = process(first(b), false)
         override fun onResults(b: Bundle?) {
@@ -172,7 +220,7 @@ object ChronosEngine {
         override fun onError(error: Int) {
             if (speaking || handled) return
             when (error) {
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> { running = false }
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> running = false
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
                 SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> restartSoon(1500)
                 else -> restartSoon(200)

@@ -76,27 +76,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun startChronosService(ctx: Context) =
+internal fun startChronosService(ctx: Context) =
     ContextCompat.startForegroundService(ctx, Intent(ctx, ChronosService::class.java))
 
 @Composable
-fun PclApp() {
-    val ctx = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
-        if (r[Manifest.permission.RECORD_AUDIO] == true) startChronosService(ctx)
-    }
-    LaunchedEffect(Unit) {
-        val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) startChronosService(ctx) else {
-            val perms = buildList {
-                add(Manifest.permission.RECORD_AUDIO)
-                if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            }.toTypedArray()
-            launcher.launch(perms)
-        }
-    }
-
+fun HomeScreen() {
     val locked by ChronosEngine.locked.collectAsState()
     val combat by ChronosEngine.combat.collectAsState()
     val quantum by ChronosEngine.quantum.collectAsState()
@@ -129,8 +113,8 @@ fun PclApp() {
 
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            ModeCard("COMBAT MODE", Icons.Filled.Warning, Red, combat, Modifier.weight(1f)) { ChronosEngine.triggerCombat() }
-            ModeCard("QUANTUM FOCUS", Icons.Filled.Star, Violet, quantum, Modifier.weight(1f)) { ChronosEngine.triggerQuantum() }
+            ModeCard("COMBAT MODE", Icons.Filled.Warning, Red, combat, Modifier.weight(1f)) { ChronosEngine.toggleCombat() }
+            ModeCard("QUANTUM FOCUS", Icons.Filled.Star, Violet, quantum, Modifier.weight(1f)) { ChronosEngine.toggleQuantum() }
         }
         Spacer(Modifier.height(12.dp))
     }
