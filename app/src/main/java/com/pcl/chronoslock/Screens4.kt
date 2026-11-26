@@ -108,7 +108,7 @@ fun StyleScreen() {
         // ---- theme ----
         SectionLabel("THEME")
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pal.MODES.forEach { (id, label) -> Chip(label, Pal.mode == id, C.Cyan) { Pal.setMode(id) } }
+            Pal.MODES.forEach { (id, label) -> Chip(label, Pal.mode == id, C.Cyan) { Pal.chooseMode(id) } }
         }
 
         SectionLabel("MATERIAL YOU")
@@ -120,7 +120,7 @@ fun StyleScreen() {
                     Text2(if (Pal.dynamicSupported) "Colours the whole app from your wallpaper, like Google's own apps." else "Needs Android 12 or newer. Your phone is older, so pick an accent colour below instead.", C.Soft, 12, mono = false)
                 }
                 Spacer(Modifier.padding(6.dp))
-                if (Pal.dynamicSupported) Chip(if (Pal.dynamic) "ON" else "OFF", Pal.dynamic, C.Green) { Pal.setDynamic(!Pal.dynamic) }
+                if (Pal.dynamicSupported) Chip(if (Pal.dynamic) "ON" else "OFF", Pal.dynamic, C.Green) { Pal.chooseDynamic(!Pal.dynamic) }
             }
         }
 
@@ -161,7 +161,7 @@ fun StyleScreen() {
                     Text2("Frosted, see-through cards with soft glowing light behind them.", C.Soft, 12, mono = false)
                 }
                 Spacer(Modifier.padding(6.dp))
-                Chip(if (Pal.glass) "ON" else "OFF", Pal.glass, C.Cyan) { Pal.setGlass(!Pal.glass) }
+                Chip(if (Pal.glass) "ON" else "OFF", Pal.glass, C.Cyan) { Pal.chooseGlass(!Pal.glass) }
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -173,7 +173,7 @@ fun StyleScreen() {
                     Text2("Springy presses, fades and slides. Turn off for a calmer app or to save battery.", C.Soft, 12, mono = false)
                 }
                 Spacer(Modifier.padding(6.dp))
-                Chip(if (Pal.anim) "ON" else "OFF", Pal.anim, C.Green) { Pal.setAnim(!Pal.anim) }
+                Chip(if (Pal.anim) "ON" else "OFF", Pal.anim, C.Green) { Pal.chooseAnim(!Pal.anim) }
             }
         }
 

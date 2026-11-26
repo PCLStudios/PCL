@@ -289,7 +289,7 @@ object Commands {
         Cmd("APP", "open guide  /  setup guide", "Opens the beginner guide (chatbot setup, music, tips).", { it.has("open guide", "setup guide", "show guide", "beginner guide") }) { ChronosEngine.tab.value = Screen.GUIDE; "Here is the guide" },
         Cmd("APP", "dark mode  /  light mode  /  amoled mode", "Switches the app's theme.", { it.has("dark mode", "light mode", "day mode", "night mode", "amoled mode", "black mode") }) {
             val m = if (body.has("light", "day")) "light" else if (body.has("amoled", "black")) "amoled" else "dark"
-            Pal.setMode(m); "Switching to $m theme"
+            Pal.chooseMode(m); "Switching to $m theme"
         },
         Cmd("APP", "open style  /  themes", "Opens the STYLE screen: colours, fonts, glass and names.", { it.has("theme", "style screen", "open style", "customize", "customise") }) { ChronosEngine.tab.value = Screen.STYLE; "Opening style" },
         Cmd("APP", "open system  /  settings", "Opens the system screen (A.I. key, timeout, whisper).", { it.has("settings", "system screen", "open system") }) { ChronosEngine.tab.value = Screen.SYSTEM; "Opening system settings" },

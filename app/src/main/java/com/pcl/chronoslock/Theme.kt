@@ -125,12 +125,12 @@ object Pal {
         prefs?.edit()?.putString("th_mode", mode)?.putInt("th_accent", accentIdx)?.putInt("th_font", fontIdx)
             ?.putBoolean("th_glass", glass)?.putBoolean("th_dynamic", dynamic)?.putBoolean("th_anim", anim)?.apply()
     }
-    fun setMode(m: String) { mode = m; save() }
+    fun chooseMode(m: String) { mode = m; save() }
     fun setAccent(i: Int) { accentIdx = i; dynamic = false; save() }
     fun setFont(i: Int) { fontIdx = i; save() }
-    fun setGlass(b: Boolean) { glass = b; save() }
-    fun setDynamic(b: Boolean) { dynamic = b && dynamicSupported; save() }
-    fun setAnim(b: Boolean) { anim = b; save() }
+    fun chooseGlass(b: Boolean) { glass = b; save() }
+    fun chooseDynamic(b: Boolean) { dynamic = b && dynamicSupported; save() }
+    fun chooseAnim(b: Boolean) { anim = b; save() }
 
     /** Reads the wallpaper colours Android generated (Android 12+). */
     fun applyDynamic(ctx: Context) {
