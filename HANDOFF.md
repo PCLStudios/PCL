@@ -1,8 +1,26 @@
 # PCL handoff (for the next AI / session)
 
-Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Package `com.pcl.chronoslock`. Version 0.4.0.
+Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Package `com.pcl.chronoslock`. Version 0.5.0.
 User's goal: always-listening voice assistant "Chronos Lock" with combat/quantum modes, many voice commands, whisper
 understanding, fuzzy wake word, session-style locking, an online chatbot ("Third Eye"), and a nicer side-panel UI.
+
+## v0.5.0 changes (written, NOT yet compiled: CI is the compiler)
+- MUSIC FIX: VoskMic.kt = offline Vosk recogniser fed by AudioRecord (no audio focus => music never pauses). Model (~40 MB) is
+  downloaded in-app (Voice > MUSIC-SAFE MIC). Used in listen() when installed, voskOn, not whisper, not chatbot mode; falls back to
+  SpeechRecognizer on failure. Deps: vosk-android 0.3.47 + jna 5.13.0@aar (jna excluded from vosk's pom), abiFilters arm64/armeabi-v7a.
+  If CI complains about duplicate JNA classes or the vosk artifact, adjust build.gradle.kts first.
+- RENAMES: Names.kt (Compose state, prefs nameCombat/nameQuantum/nameEye; default chatbot name "Chatbot", "third eye" always an alias).
+  Commands use Names.combat()/quantum()/eye()/…Off(); replies via Names.combatReply(); persona via ThirdEyeAI.buildPersona(name, custom)
+  (custom persona "" = automatic). Help text goes through Names.rewrite().
+- PROGRAMS: Flows.kt rewritten: 16 step types, per-step IF (cond/condArg) and chance, templates, move up/down, per-slot ON/OFF,
+  slots now combat/quantum/lock/eye/whisper x on/off (watchers in ChronosEngine.init). {time}{date}{battery} placeholders.
+- THEME: Theme.kt = Pal (mode dark/amoled/light, accent, font, glass, Material You via dynamic*ColorScheme, animations) + C getters.
+  Helpers: Modifier.pressable / appear / card, AppBackground. STYLE screen (Screens4.kt) also holds name editing + RenameDialog.
+- HOME WIDGETS: Widgets.kt (HomeLayout, 20 widgets, EDIT mode: wiggle, remove, move, add tray, rename modes).
+- GUIDE screen (Screens5.kt): beginner Third Eye/API guide, error table, music, programs, share. IntroDialog first launch.
+- QoL: settings backup/restore via clipboard (API key excluded), share button, voice commands for themes/guide/programs,
+  AnimatedContent screen transitions, theme-aware status bar.
+- devtests/ stubs are out of date (Step has new fields, Names added); not wired into CI.
 
 ## v0.4.0 changes
 - ALWAYS ON switch (small round button by the big lock button, Home). ON = old behaviour (mic always listens for the wake word).

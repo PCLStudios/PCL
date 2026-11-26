@@ -3,6 +3,7 @@ package com.pcl.chronoslock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,53 +26,71 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 // ============================ PROGRAMS ============================
 
 @Composable
 fun FlowsScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        ScreenTitle("PROGRAMS", "Program what happens when a mode turns on or off. Steps run top to bottom.")
+        ScreenTitle("PROGRAMS", "Program what happens when something turns on or off. Steps run top to bottom.")
         Panel {
-            Text2("EXAMPLES", C.Cyan, 11, bold = true, spacing = 2)
+            Text2("WHAT YOU CAN DO", C.Cyan, 11, bold = true, spacing = 2)
             Spacer(Modifier.height(4.dp))
-            Text2("Combat ON:  OPEN APP “Metrolist”, then 4 s later MEDIA KEY “play”.", C.Soft, 12, mono = false)
-            Spacer(Modifier.height(3.dp))
-            Text2("Quantum ON:  PLAY SONG with several lines (lofi beats / deep focus / brown noise) and an app name: she picks one at random.", C.Soft, 12, mono = false)
-            Spacer(Modifier.height(3.dp))
-            Text2("Quantum OFF:  MEDIA KEY “pause”.", C.Soft, 12, mono = false)
+            Text2("Open apps, play songs, open links, press media keys, set volume, speak, flash the flashlight, wait, start timers, save notes, switch other modes, ask the A.I., search the web, open settings, jump to a PCL screen, vibrate.", C.Soft, 12, mono = false)
             Spacer(Modifier.height(6.dp))
-            Text2("Tip: PLAY SONG uses Android's “play from search”, which Spotify and YouTube Music understand. If your player ignores it, use OPEN APP then MEDIA KEY play, or OPEN LINK with the app name.", C.Dim, 11, mono = false)
+            Text2("Every step can have a wait, an IF (battery, charging, night, weekday, online, music playing…) and a chance. Start from a template with one tap.", C.Soft, 12, mono = false)
+            Spacer(Modifier.height(6.dp))
+            Text2("Tip: PLAY SONG uses Android's “play from search”, which Spotify and YouTube Music understand. If your player ignores it, use OPEN APP then MEDIA KEY play. Several lines in a box = she picks one at random.", C.Dim, 11, mono = false)
         }
-        FlowBlock("COMBAT MODE", C.Red, "combat")
-        FlowBlock("QUANTUM FOCUS", C.Violet, "quantum")
+        FlowBlock(Names.combat.uppercase(Locale.US), C.Red, "combat", "TURNED ON", "TURNED OFF")
+        FlowBlock(Names.quantum.uppercase(Locale.US), C.Violet, "quantum", "TURNED ON", "TURNED OFF")
+        FlowBlock("CHRONOS LOCK", C.Green, "lock", "ENGAGED", "DISENGAGED")
+        FlowBlock(Names.eye.uppercase(Locale.US), C.Cyan, "eye", "OPENED", "CLOSED")
+        FlowBlock("WHISPER MODE", C.Amber, "whisper", "TURNED ON", "TURNED OFF")
         Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun FlowBlock(title: String, accent: Color, base: String) {
+private fun FlowBlock(title: String, accent: Color, base: String, onWord: String, offWord: String) {
     SectionLabel(title)
-    SlotEditor("WHEN TURNED ON", accent, base + "_on")
+    SlotEditor("WHEN $onWord", accent, base + "_on")
     Spacer(Modifier.height(10.dp))
-    SlotEditor("WHEN TURNED OFF", accent, base + "_off")
+    SlotEditor("WHEN $offWord", accent, base + "_off")
 }
 
 @Composable
 private fun SlotEditor(label: String, accent: Color, slot: String) {
     val steps by Flows.flow(slot).collectAsState()
+    val off by Flows.disabled.collectAsState()
+    val enabled = slot !in off
     val ctx = LocalContext.current
-    Panel(accent = accent) {
-        Text2(label, accent, 12, bold = true, spacing = 2)
+    Panel(accent = if (enabled) accent else C.Line) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text2(label, if (enabled) accent else C.Dim, 12, bold = true, spacing = 2, modifier = Modifier.weight(1f))
+            Chip(if (enabled) "ON" else "OFF", enabled, accent) { Flows.setEnabled(slot, !enabled) }
+        }
         if (steps.isEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text2("No steps. She only speaks.", C.Soft, 12, mono = false)
         }
-        steps.forEachIndexed { i, s -> key(s.id) { StepEditor(slot, i + 1, s) } }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton("+ ADD STEP", accent, modifier = Modifier.weight(1f)) { Flows.add(slot, Flows.OPEN_APP) }
-            if (steps.isNotEmpty()) PillButton("▶ TEST", accent, modifier = Modifier.weight(1f)) { Flows.run(ctx, steps) }
+        steps.forEachIndexed { i, s -> key(s.id) { StepEditor(slot, i + 1, steps.size, s, accent) } }
+        Spacer(Modifier.height(12.dp))
+        Text2("ADD A STEP", C.Dim, 10, spacing = 2)
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Flows.TYPES.forEach { (t, l) -> Chip("+ $l", false, accent) { Flows.add(slot, t) } }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text2("TEMPLATES", C.Dim, 10, spacing = 2)
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Flows.TEMPLATES.forEach { (n, _) -> Chip(n, false, C.Green) { Flows.addTemplate(slot, n) } }
+        }
+        if (steps.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            PillButton("▶ TEST THESE STEPS", accent, modifier = Modifier.fillMaxWidth()) { Flows.run(ctx, steps) }
         }
     }
 }
@@ -82,34 +101,82 @@ private fun hintFor(type: String) = when (type) {
     Flows.URL -> "link. Several lines = random pick"
     Flows.KEY -> "play, pause, next, previous or playpause"
     Flows.VOLUME -> "0 to 100"
-    Flows.SAY -> "what she says"
-    else -> "on or off"
+    Flows.SAY -> "what she says. {time} {date} {battery} work. Several lines = random"
+    Flows.TORCH -> "on, off or blink"
+    Flows.WAIT -> "seconds to wait"
+    Flows.TIMER -> "minutes, e.g. 25"
+    Flows.NOTE -> "note text. {time} {date} {battery} work"
+    Flows.MODE -> "e.g. combat on, whisper off, lock on"
+    Flows.SCREEN -> "home, notes, programs, voice, system, style, guide"
+    Flows.VIBRATE -> "milliseconds, e.g. 400"
+    Flows.SETTINGS -> "wifi, bluetooth, display, sound, battery saver, apps"
+    Flows.ASK -> "question for the A.I. (she speaks the answer)"
+    Flows.SEARCH -> "what to search on Google"
+    else -> ""
 }
 
 @Composable
-private fun StepEditor(slot: String, n: Int, s: Step) {
+private fun StepEditor(slot: String, n: Int, total: Int, s: Step, accent: Color) {
     var arg by remember { mutableStateOf(s.arg) }
     var app by remember { mutableStateOf(s.app) }
     var delay by remember { mutableStateOf(if (s.delay == 0) "" else s.delay.toString()) }
-    fun push(type: String = s.type) = Flows.update(slot, s.copy(type = type, arg = arg, app = app, delay = delay.toIntOrNull() ?: 0))
+    var condArg by remember { mutableStateOf(s.condArg) }
+    fun push(type: String = s.type) = Flows.update(slot, s.copy(type = type, arg = arg, app = app, delay = delay.toIntOrNull() ?: 0, condArg = condArg))
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text2("STEP $n", C.Dim, 10, spacing = 2, modifier = Modifier.weight(1f))
-        Text2("✕", C.Red, 16, modifier = Modifier.clickable { Flows.remove(slot, s.id) }.padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
+        if (n > 1) Text2("▲", C.Soft, 16, modifier = Modifier.clickable { Flows.move(slot, s.id, -1) }.padding(horizontal = 10.dp, vertical = 4.dp))
+        if (n < total) Text2("▼", C.Soft, 16, modifier = Modifier.clickable { Flows.move(slot, s.id, 1) }.padding(horizontal = 10.dp, vertical = 4.dp))
+        Text2("✕", C.Red, 16, modifier = Modifier.clickable { Flows.remove(slot, s.id) }.padding(start = 10.dp, top = 4.dp, bottom = 4.dp))
     }
     Spacer(Modifier.height(4.dp))
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Flows.TYPES.forEach { (t, l) -> Chip(l, s.type == t, C.Cyan) { push(t) } }
+        Flows.TYPES.forEach { (t, l) -> Chip(l, s.type == t, accent) { push(t) } }
     }
     Spacer(Modifier.height(6.dp))
-    val multi = s.type == Flows.PLAY || s.type == Flows.URL
-    Field(arg, { arg = it; push() }, hintFor(s.type), Modifier.fillMaxWidth(), singleLine = !multi,
-        imeAction = if (multi) ImeAction.Default else ImeAction.Done)
-    if (multi) {
+    Flows.CHOICES[s.type]?.let { opts ->
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            opts.forEach { o -> Chip(o, arg.trim().equals(o, true), C.Green) { arg = o; push() } }
+        }
+        Spacer(Modifier.height(6.dp))
+    }
+    run {
+        val multi = s.type == Flows.PLAY || s.type == Flows.URL || s.type == Flows.SAY || s.type == Flows.ASK
+        Field(arg, { arg = it; push() }, hintFor(s.type), Modifier.fillMaxWidth(), singleLine = !multi,
+            imeAction = if (multi) ImeAction.Default else ImeAction.Done)
+    }
+    if (s.type == Flows.PLAY || s.type == Flows.URL) {
         Spacer(Modifier.height(6.dp))
         Field(app, { app = it; push() }, "app to use (optional), e.g. Metrolist or Spotify", Modifier.fillMaxWidth())
     }
+    if (s.type == Flows.TIMER) {
+        Spacer(Modifier.height(6.dp))
+        Field(app, { app = it; push() }, "what she says when it ends (optional)", Modifier.fillMaxWidth())
+    }
     Spacer(Modifier.height(6.dp))
     Field(delay, { delay = it.filter { c -> c.isDigit() }.take(3); push() }, "wait before this step, seconds (optional)", Modifier.fillMaxWidth())
+
+    // ---- conditions ----
+    Spacer(Modifier.height(8.dp))
+    Text2("ONLY IF", C.Dim, 10, spacing = 2)
+    Spacer(Modifier.height(4.dp))
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Flows.CONDS.forEach { (c, l) -> Chip(l, s.cond == c, C.Amber) { Flows.update(slot, s.copy(arg = arg, app = app, delay = delay.toIntOrNull() ?: 0, condArg = condArg, cond = c)) } }
+    }
+    if (Flows.condNeedsNumber(s.cond)) {
+        Spacer(Modifier.height(6.dp))
+        Field(condArg, { condArg = it.filter { c -> c.isDigit() }.take(3); push() },
+            if (s.cond == "after" || s.cond == "before") "hour 0 to 23" else "percent 0 to 100", Modifier.fillMaxWidth())
+    }
+    Spacer(Modifier.height(8.dp))
+    Text2("CHANCE IT HAPPENS", C.Dim, 10, spacing = 2)
+    Spacer(Modifier.height(4.dp))
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(100, 75, 50, 25, 10).forEach { p ->
+            Chip(if (p == 100) "ALWAYS" else "$p%", s.chance == p, C.Amber) {
+                Flows.update(slot, s.copy(arg = arg, app = app, delay = delay.toIntOrNull() ?: 0, condArg = condArg, chance = p))
+            }
+        }
+    }
 }

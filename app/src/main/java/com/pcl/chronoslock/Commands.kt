@@ -32,7 +32,6 @@ private val OFFW = setOf("off", "disengage", "disengaged", "deactivate", "deacti
 private fun String.has(vararg w: String) = w.any { contains(it) }
 private fun String.hasW(vararg w: String): Boolean { val t = split(" "); return w.any { it in t } }
 private fun String.off() = hasW(*OFFW.toTypedArray()) || has("stand down", "turn off", "shut down")
-private val EYE = arrayOf("third eye", "thirdeye", "3rd eye", "third i")
 
 private val JOKES = listOf(
     "Why do programmers prefer dark mode? Because light attracts bugs.",
@@ -136,7 +135,7 @@ object Commands {
     /** Only short phrases count, so a long question that happens to contain "stop" or "that is all" isn't mistaken for "close". */
     fun isEyeClose(s: String): Boolean {
         if (s.split(" ").size > 6) return false
-        return (s.has(*EYE) && s.off()) || s.has("goodbye", "that is all", "close the eye", "end chat")
+        return Names.eyeOff(s) || s.has("goodbye", "that is all", "close the eye", "end chat")
     }
 
     /** Commands that carry a free-form payload may be longer than the short-phrase limit. */
@@ -157,22 +156,22 @@ object Commands {
 
     /** Order matters: specific commands first, general ones last. */
     val all: List<Cmd> = listOf(
-        // ---- MODES ----
-        Cmd("MODES", "disengage combat mode", "Turns combat mode off.", { it.has("combat") && it.off() }) { ChronosEngine.setCombat(false); "Combat mode has been disengaged" },
-        Cmd("MODES", "disengage quantum focus", "Turns quantum focus off.", { it.has("quantum", "focus") && it.off() }) { ChronosEngine.setQuantum(false); "Quantum focus has been disengaged" },
+        // ---- MODES (they answer to whatever names the user chose in STYLE) ----
+        Cmd("MODES", "disengage combat mode", "Turns combat mode off.", { Names.combatOff(it) }) { ChronosEngine.setCombat(false); Names.combatReply(false) },
+        Cmd("MODES", "disengage quantum focus", "Turns quantum focus off.", { Names.quantumOff(it) }) { ChronosEngine.setQuantum(false); Names.quantumReply(false) },
         Cmd("MODES", "stand down  /  all clear", "Turns off combat mode and quantum focus together.", { it.has("stand down", "all clear", "all modes off") }) { ChronosEngine.setCombat(false); ChronosEngine.setQuantum(false); "All modes have been disengaged" },
-        Cmd("MODES", "red alert", "Instantly engages combat mode.", { it.has("red alert") }) { ChronosEngine.setCombat(true); "Red alert. Combat mode has been engaged" },
-        Cmd("MODES", "combat mode", "Engages combat mode.", { it.has("combat") }) { ChronosEngine.setCombat(true); "Combat mode has been engaged" },
-        Cmd("MODES", "quantum focus", "Approves and activates quantum focus.", { it.has("quantum") || it.hasW("focus") }) { ChronosEngine.setQuantum(true); "Quantum focus has been approved" },
+        Cmd("MODES", "red alert", "Instantly engages combat mode.", { it.has("red alert") }) { ChronosEngine.setCombat(true); "Red alert. " + Names.combatReply(true) },
+        Cmd("MODES", "combat mode", "Engages combat mode.", { Names.combat(it) }) { ChronosEngine.setCombat(true); Names.combatReply(true) },
+        Cmd("MODES", "quantum focus", "Approves and activates quantum focus.", { Names.quantum(it) }) { ChronosEngine.setQuantum(true); Names.quantumReply(true) },
         Cmd("MODES", "stop whispering  /  normal mode", "Returns listening to normal.", { (it.has("whisper") && it.off()) || it.has("normal mode", "stop whispering") }) { ChronosEngine.setWhisper(false); "Whisper mode disabled" },
         Cmd("MODES", "whisper mode", "Listens harder for quiet speech (online recognition, waits longer) and answers quietly.", { it.has("whisper") }) { ChronosEngine.setWhisper(true); "Whisper mode enabled. I am listening closely" },
         // ---- THIRD EYE ----
-        Cmd("THIRD EYE (A.I.)", "close third eye", "Leaves chatbot mode and returns to commands.", { it.has(*EYE) && it.off() }) { ChronosEngine.closeEye() },
-        Cmd("THIRD EYE (A.I.)", "ask <anything>", "One quick question to the A.I. without staying in chatbot mode.", { it.startsWith("ask ") && !it.has(*EYE) || it.startsWith("ask third eye ") || it.startsWith("ask the third eye ") }) {
-            val q = body.removePrefix("ask").trim().removePrefix("the").trim().removePrefix("third eye").trim()
+        Cmd("THIRD EYE (A.I.)", "close third eye", "Leaves chatbot mode and returns to commands.", { Names.eyeOff(it) }) { ChronosEngine.closeEye() },
+        Cmd("THIRD EYE (A.I.)", "ask <anything>", "One quick question to the A.I. without staying in chatbot mode.", { it.startsWith("ask ") && (!Names.eye(it) || Names.askLeadIsEye(it)) }) {
+            val q = Names.askRemainder(body)
             if (q.isBlank()) "What would you like to ask?" else { ChronosEngine.ask(q); "" }
         },
-        Cmd("THIRD EYE (A.I.)", "open third eye", "Connects to the online chatbot. Then just talk — every sentence goes to her.", { it.has(*EYE) }) { ChronosEngine.openEye() },
+        Cmd("THIRD EYE (A.I.)", "open third eye", "Connects to the online chatbot. Then just talk — every sentence goes to her.", { Names.eye(it) }) { ChronosEngine.openEye() },
         // ---- SYSTEM ----
         Cmd("SYSTEM", "flashlight off", "Turns the phone flashlight off.", { it.has("flashlight", "flash light", "torch") && it.off() }) { if (torch(it, false)) "Flashlight off" else "Flashlight unavailable" },
         Cmd("SYSTEM", "flashlight on", "Turns the phone flashlight on.", { it.has("flashlight", "flash light", "torch") }) { if (torch(it, true)) "Flashlight on" else "Flashlight unavailable" },
@@ -233,7 +232,7 @@ object Commands {
         Cmd("INFO", "uptime", "How long the phone has been on.", { it.has("uptime", "how long has the phone") }) { "The phone has been running for ${uptime()}" },
         Cmd("INFO", "diagnostics", "Full system check: modes, battery, network, time.", { it.has("diagnostic", "system check") || it.hasW("scan") }) { "Diagnostics complete. ${battery(it)}. ${network(it)}. The time is ${clock()}. All systems nominal" },
         Cmd("INFO", "status report", "Reads out the state of every system.", { it.hasW("status", "report") }) {
-            "Chronos Lock is ${on(ChronosEngine.locked.value)}. Combat mode is ${on(ChronosEngine.combat.value)}. Quantum focus is ${on(ChronosEngine.quantum.value)}. Whisper mode is ${on(ChronosEngine.whisper.value)}."
+            "Chronos Lock is ${on(ChronosEngine.locked.value)}. ${Names.combat} is ${on(ChronosEngine.combat.value)}. ${Names.quantum} is ${on(ChronosEngine.quantum.value)}. Whisper mode is ${on(ChronosEngine.whisper.value)}."
         },
         Cmd("INFO", "good morning / afternoon / evening", "A greeting that fits the time of day.", { it.has("good morning", "good afternoon", "good evening") }) {
             val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -286,9 +285,16 @@ object Commands {
         Cmd("APP", "show commands  /  help", "Opens the command list.", { it.hasW("help", "commands") || it.has("what can you do") }) { ChronosEngine.tab.value = Screen.HELP; "Here are my commands" },
         Cmd("APP", "show notes", "Opens the Notes screen.", { it.has("show notes", "open notes") }) { ChronosEngine.tab.value = Screen.NOTES; "Here are your notes" },
         Cmd("APP", "open voice settings", "Opens the voice screen.", { it.has("voice settings", "voice menu") }) { ChronosEngine.tab.value = Screen.VOICE; "Opening voice settings" },
+        Cmd("APP", "show programs", "Opens the PROGRAMS screen where you build automations.", { it.has("show programs", "open programs", "programs screen", "automations") }) { ChronosEngine.tab.value = Screen.FLOWS; "Here are your programs" },
+        Cmd("APP", "open guide  /  setup guide", "Opens the beginner guide (chatbot setup, music, tips).", { it.has("open guide", "setup guide", "show guide", "beginner guide") }) { ChronosEngine.tab.value = Screen.GUIDE; "Here is the guide" },
+        Cmd("APP", "dark mode  /  light mode  /  amoled mode", "Switches the app's theme.", { it.has("dark mode", "light mode", "day mode", "night mode", "amoled mode", "black mode") }) {
+            val m = if (body.has("light", "day")) "light" else if (body.has("amoled", "black")) "amoled" else "dark"
+            Pal.setMode(m); "Switching to $m theme"
+        },
+        Cmd("APP", "open style  /  themes", "Opens the STYLE screen: colours, fonts, glass and names.", { it.has("theme", "style screen", "open style", "customize", "customise") }) { ChronosEngine.tab.value = Screen.STYLE; "Opening style" },
         Cmd("APP", "open system  /  settings", "Opens the system screen (A.I. key, timeout, whisper).", { it.has("settings", "system screen", "open system") }) { ChronosEngine.tab.value = Screen.SYSTEM; "Opening system settings" },
         Cmd("APP", "go home", "Returns to the main screen.", { it.has("go home", "home screen", "main menu") }) { ChronosEngine.tab.value = Screen.HOME; "Returning home" },
-        Cmd("APP", "who are you", "She introduces herself.", { it.has("who are you", "your name", "what are you") }) { "I am Chronos Lock, your personal A.I. assistant. Say open third eye to talk with my network core" },
+        Cmd("APP", "who are you", "She introduces herself.", { it.has("who are you", "your name", "what are you") }) { "I am Chronos Lock, your personal A.I. assistant. Say open ${Names.eye} to talk with my network core" },
         Cmd("APP", "how many commands", "Counts what she can do.", { it.has("how many commands") }) { "I understand ${all.size} commands" },
         // ---- generic app launcher: must stay last of the 'open' family ----
         Cmd("APPS", "open <any app name>", "Opens any installed app by name, e.g. “open spotify” (PCL must be on screen).", { it.startsWith("open ") || it.startsWith("launch ") || it.startsWith("start ") }) {

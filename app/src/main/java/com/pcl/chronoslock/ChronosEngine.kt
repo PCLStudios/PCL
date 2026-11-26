@@ -13,13 +13,23 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import org.json.JSONObject
 import org.json.JSONArray
 import java.util.Locale
 
 enum class Phase { STANDBY, LISTENING, SPEAKING, THINKING }
 enum class Screen(val label: String, val glyph: String) {
-    HOME("HOME", "◎"), EYE("THIRD EYE", "◉"), FLOWS("PROGRAMS", "⚡"), NOTES("NOTES", "✎"), HELP("COMMANDS", "☰"), VOICE("VOICE", "♪"), SYSTEM("SYSTEM", "⚙")
+    HOME("HOME", "◎"), EYE("CHATBOT", "◉"), FLOWS("PROGRAMS", "⚡"), NOTES("NOTES", "✎"), HELP("COMMANDS", "☰"),
+    GUIDE("GUIDE", "?"), STYLE("STYLE", "✦"), VOICE("VOICE", "♪"), SYSTEM("SYSTEM", "⚙");
+    /** The chatbot screen shows the user's own name for it. */
+    val title: String get() = if (this == EYE) Names.eye.uppercase(Locale.US) else label
 }
 data class VoiceOpt(val name: String, val label: String)
 data class Msg(val fromUser: Boolean, val text: String)
@@ -68,7 +78,12 @@ object ChronosEngine {
     val aiUrl = MutableStateFlow(ThirdEyeAI.DEFAULT_URL)
     val aiModel = MutableStateFlow(ThirdEyeAI.DEFAULT_MODEL)
     val aiKey = MutableStateFlow("")
-    val persona = MutableStateFlow(ThirdEyeAI.DEFAULT_PERSONA)
+    val persona = MutableStateFlow("")             // user's own persona text; blank = automatic (uses the chatbot's name)
+    val voskOn = MutableStateFlow(true)            // use the music-safe offline mic when it is installed
+    val showIntro = MutableStateFlow(false)        // first-launch welcome
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var voskRun: VoskMic.Run? = null
+    private var voskBroken = false
 
     // ---- internals ----
     private sealed class Act {
@@ -119,21 +134,68 @@ object ChronosEngine {
         if (ctx != null) return
         ctx = context.applicationContext
         prefs = ctx!!.getSharedPreferences("pcl", Context.MODE_PRIVATE)
+        loadPrefs()
+        VoskMic.init(ctx!!)
+        showIntro.value = !prefs.getBoolean("intro_done", false)
+        // programs that run when these switch on/off
+        locked.drop(1).onEach { c -> ctx?.let { Flows.runSlot(it, if (c) "lock_on" else "lock_off") } }.launchIn(scope)
+        thirdEye.drop(1).onEach { c -> ctx?.let { Flows.runSlot(it, if (c) "eye_on" else "eye_off") } }.launchIn(scope)
+        whisper.drop(1).onEach { c -> ctx?.let { Flows.runSlot(it, if (c) "whisper_on" else "whisper_off") } }.launchIn(scope)
+        tts = TextToSpeech(ctx) { s -> if (s == TextToSpeech.SUCCESS) onTtsReady() }
+    }
+
+    /** Reads every saved setting into the live state (also used after importing a backup). */
+    private fun loadPrefs() {
         pitch.value = prefs.getFloat("pitch", 1.0f)
         rate.value = prefs.getFloat("rate", 1.0f)
         whisper.value = prefs.getBoolean("whisper", false)
         alwaysOn.value = prefs.getBoolean("alwaysOn", true)
         keepMusic.value = prefs.getBoolean("keepMusic", true)
+        voskOn.value = prefs.getBoolean("voskOn", true)
         Flows.init(prefs)
+        Names.init(prefs)
+        Pal.init(prefs)
+        HomeLayout.load(prefs)
         sessionMin.value = prefs.getInt("sessionMin", 0)
         aiUrl.value = prefs.getString("aiUrl", ThirdEyeAI.DEFAULT_URL) ?: ThirdEyeAI.DEFAULT_URL
         aiModel.value = prefs.getString("aiModel", ThirdEyeAI.DEFAULT_MODEL) ?: ThirdEyeAI.DEFAULT_MODEL
         aiKey.value = prefs.getString("aiKey", "") ?: ""
-        persona.value = prefs.getString("persona", ThirdEyeAI.DEFAULT_PERSONA) ?: ThirdEyeAI.DEFAULT_PERSONA
+        val p = prefs.getString("persona", "") ?: ""
+        persona.value = if (p == ThirdEyeAI.DEFAULT_PERSONA) "" else p       // the old built-in text counts as "automatic"
         notes.value = runCatching {
             val a = JSONArray(prefs.getString("notes", "[]")); List(a.length()) { a.getString(it) }
         }.getOrDefault(emptyList())
-        tts = TextToSpeech(ctx) { s -> if (s == TextToSpeech.SUCCESS) onTtsReady() }
+    }
+
+    fun introDone() { showIntro.value = false; prefs.edit().putBoolean("intro_done", true).apply() }
+
+    /** Settings as JSON text (the API key is left out on purpose so a shared backup never leaks it). */
+    fun exportSettings(): String {
+        val o = JSONObject()
+        for ((k, v) in prefs.all) { if (k == "aiKey" || k == "intro_done") continue; o.put(k, v) }
+        return o.toString()
+    }
+
+    /** @return null if imported, otherwise what went wrong. */
+    fun importSettings(text: String): String? {
+        val o = try { JSONObject(text.trim()) } catch (e: Exception) { return "That isn't a PCL backup." }
+        if (o.length() == 0) return "The backup is empty."
+        val ed = prefs.edit()
+        for (k in o.keys()) {
+            if (k == "aiKey") continue
+            if (k == "pitch" || k == "rate") { ed.putFloat(k, o.optDouble(k, 1.0).toFloat()); continue }
+            when (val v = o.get(k)) {
+                is Boolean -> ed.putBoolean(k, v)
+                is Int -> ed.putInt(k, v)
+                is Long -> ed.putLong(k, v)
+                is Double -> ed.putFloat(k, v.toFloat())
+                is String -> ed.putString(k, v)
+            }
+        }
+        ed.apply()
+        loadPrefs()
+        if (running && !speaking && !thinking) restartSoon(100)
+        return null
     }
 
     fun start() {
@@ -169,12 +231,12 @@ object ChronosEngine {
     fun setCombat(on: Boolean) {
         if (combat.value == on) return
         combat.value = on
-        ctx?.let { Flows.run(it, Flows.get(if (on) "combat_on" else "combat_off")) }
+        ctx?.let { Flows.runSlot(it, if (on) "combat_on" else "combat_off") }
     }
     fun setQuantum(on: Boolean) {
         if (quantum.value == on) return
         quantum.value = on
-        ctx?.let { Flows.run(it, Flows.get(if (on) "quantum_on" else "quantum_off")) }
+        ctx?.let { Flows.runSlot(it, if (on) "quantum_on" else "quantum_off") }
     }
     /** Lets a programmed step speak. */
     fun announce(text: String) { say(text) }
@@ -185,16 +247,25 @@ object ChronosEngine {
         if (running && !speaking && !thinking) restartSoon(100)      // opens or closes the mic right away
     }
     fun setKeepMusic(on: Boolean) { keepMusic.value = on; prefs.edit().putBoolean("keepMusic", on).apply() }
+    fun setVoskOn(on: Boolean) {
+        voskOn.value = on; prefs.edit().putBoolean("voskOn", on).apply(); voskBroken = false
+        if (running && !speaking && !thinking) restartSoon(100)
+    }
+    /** Downloads the offline speech model for the music-safe mic, then switches it on. */
+    fun downloadVosk() { ctx?.let { c -> VoskMic.download(c) { ok -> if (ok) setVoskOn(true) } } }
+    fun deleteVosk() { destroyRecognizer(); ctx?.let { VoskMic.delete(it) }; if (running && !speaking && !thinking) restartSoon(100) }
+    /** The system-prompt the chatbot actually receives. */
+    fun effectivePersona(): String = ThirdEyeAI.buildPersona(Names.eye, persona.value)
 
     fun toggleCombat() {
         if (needLock()) return
         bumpIdle(); setCombat(!combat.value)
-        say(if (combat.value) "Combat mode has been engaged" else "Combat mode has been disengaged")
+        say(Names.combatReply(combat.value))
     }
     fun toggleQuantum() {
         if (needLock()) return
         bumpIdle(); setQuantum(!quantum.value)
-        say(if (quantum.value) "Quantum focus has been approved" else "Quantum focus has been disengaged")
+        say(Names.quantumReply(quantum.value))
     }
     fun toggleWhisper() {
         setWhisper(!whisper.value)
@@ -221,7 +292,8 @@ object ChronosEngine {
     fun setSessionMin(m: Int) { sessionMin.value = m; prefs.edit().putInt("sessionMin", m).apply(); bumpIdle() }
     fun setAi(url: String, model: String, key: String, persona: String) {
         aiUrl.value = ThirdEyeAI.cleanUrl(url); aiModel.value = model.trim(); aiKey.value = key.trim()
-        this.persona.value = persona.ifBlank { ThirdEyeAI.DEFAULT_PERSONA }
+        val auto = ThirdEyeAI.defaultPersona(Names.eye)
+        this.persona.value = if (persona.isBlank() || persona.trim() == auto.trim() || persona == ThirdEyeAI.DEFAULT_PERSONA) "" else persona.trim()
         prefs.edit().putString("aiUrl", aiUrl.value).putString("aiModel", aiModel.value)
             .putString("aiKey", aiKey.value).putString("persona", this.persona.value).apply()
     }
@@ -341,12 +413,12 @@ object ChronosEngine {
     // ---- Third Eye (online chatbot) ----
     fun openEye(): String {
         locked.value = true; thirdEye.value = true; tab.value = Screen.EYE; bumpIdle()
-        return "Third Eye connected. I'm listening. Ask me anything"
+        return "${Names.eye} connected. I'm listening. Ask me anything"
     }
     fun closeEye(): String {
         thirdEye.value = false
         if (tab.value == Screen.EYE) tab.value = Screen.HOME
-        return "Third Eye closed. Back to commands"
+        return "${Names.eye} closed. Back to commands"
     }
     fun clearChat() { chat.value = emptyList() }
 
@@ -374,7 +446,7 @@ object ChronosEngine {
             chat.value = (chat.value + Msg(false, msg)).takeLast(60)
             speak(msg); return
         }
-        ThirdEyeAI.ask(aiUrl.value, aiModel.value, aiKey.value, persona.value, q) { r ->
+        ThirdEyeAI.ask(aiUrl.value, aiModel.value, aiKey.value, effectivePersona(), q) { r ->
             thinking = false
             val spoken = r.fold({ cleanForSpeech(it).ifBlank { "I have no answer for that" } }, { aiError(it) })
             // the chat shows the real technical reason too, so a failure can actually be diagnosed
@@ -398,7 +470,7 @@ object ChronosEngine {
     fun testAi(onResult: (String) -> Unit) {
         if (!isOnline()) { onResult("✗ Phone reports no internet connection."); return }
         val t0 = SystemClock.elapsedRealtime()
-        ThirdEyeAI.ask(aiUrl.value, aiModel.value, aiKey.value, persona.value, "Reply with the single word: ready") { r ->
+        ThirdEyeAI.ask(aiUrl.value, aiModel.value, aiKey.value, effectivePersona(), "Reply with the single word: ready") { r ->
             val ms = SystemClock.elapsedRealtime() - t0
             onResult(r.fold(
                 { "✓ Connected in ${ms} ms. Reply: " + it.take(80) },
@@ -546,6 +618,24 @@ object ChronosEngine {
         }
         destroyRecognizer()
         handled = false
+        if (voskOn.value && VoskMic.ready() && !voskBroken && !thirdEye.value && !whisper.value) {
+            // Music-safe path: reads the mic directly (no audio focus), so music keeps playing
+            val vid = ++session
+            phase.value = Phase.LISTENING
+            main.removeCallbacks(watchdog)
+            voskRun = VoskMic.start(c,
+                onPartial = { t -> if (vid == session) process(listOf(t), false) },
+                onFinal = { t -> if (vid == session) process(listOf(t), true) },
+                onLevel = { l -> if (vid == session) level.value = l },
+                onFail = { msg ->
+                    if (vid == session) {
+                        voskBroken = true                                  // fall back to the normal recogniser
+                        lastHeard.value = "Music-safe mic failed: $msg"
+                        restartSoon(200)
+                    }
+                })
+            return
+        }
         val eye = thirdEye.value
         val w = whisper.value
         // Online is more accurate (needed for whispers and full sentences); offline is the fallback.
@@ -587,6 +677,7 @@ object ChronosEngine {
 
     private fun destroyRecognizer() {
         session++                                  // anything the old recogniser still says is ignored
+        voskRun?.stop = true; voskRun = null
         recognizer?.let { runCatching { it.cancel(); it.destroy() } }
         recognizer = null
         level.value = 0f

@@ -1,6 +1,11 @@
 package com.pcl.chronoslock
 
 import android.os.SystemClock
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -39,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,8 +73,6 @@ import kotlin.math.sin
 @Composable
 fun HomeScreen() {
     val locked by ChronosEngine.locked.collectAsState()
-    val combat by ChronosEngine.combat.collectAsState()
-    val quantum by ChronosEngine.quantum.collectAsState()
     val whisper by ChronosEngine.whisper.collectAsState()
     val eye by ChronosEngine.thirdEye.collectAsState()
     val alwaysOn by ChronosEngine.alwaysOn.collectAsState()
@@ -76,19 +80,25 @@ fun HomeScreen() {
     val heard by ChronosEngine.lastHeard.collectAsState()
     val reply by ChronosEngine.lastReply.collectAsState()
     val timers by ChronosEngine.timers.collectAsState()
+    var renaming by remember { mutableStateOf<String?>(null) }
+    val editing = HomeLayout.editing
+    val ids = HomeLayout.ids.toList()
+
+    renaming?.let { RenameDialog(it) { renaming = null } }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(8.dp))
-        Box(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().appear(0)) {
             Box(Modifier.align(Alignment.Center)) { LockButton(locked, phase) { ChronosEngine.toggleLock() } }
             AlwaysOnButton(alwaysOn, Modifier.align(Alignment.TopEnd)) { ChronosEngine.setAlwaysOn(!alwaysOn) }
         }
         Spacer(Modifier.height(10.dp))
 
+        val eyeName = Names.eye.uppercase(java.util.Locale.US)
         val (status, col) = when {
             phase == Phase.SPEAKING -> "SPEAKING" to C.Violet
             phase == Phase.THINKING -> "THINKING…" to C.Amber
-            eye -> "THIRD EYE · TALK TO ME" to C.Violet
+            eye -> "$eyeName · TALK TO ME" to C.Violet
             locked && whisper -> "ENGAGED · WHISPER MODE" to C.Green
             locked -> "ENGAGED · SAY A COMMAND" to C.Green
             !alwaysOn -> "MIC OFF · TAP THE BUTTON TO LISTEN" to C.Soft
@@ -100,29 +110,58 @@ fun HomeScreen() {
         WaveBars(phase, if (locked) C.Green else C.Cyan)
         Spacer(Modifier.height(10.dp))
 
-        Panel {
-            Text2("HEARD", C.Dim, 10, spacing = 3)
-            Text2(if (heard.isBlank()) "—" else "“$heard”", C.Text, 13, maxLines = 2)
-            if (reply.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text2("REPLY", C.Dim, 10, spacing = 3)
-                Text2(reply, C.Soft, 13, mono = false, maxLines = 3)
-            }
-            if (phase == Phase.SPEAKING) {
-                Spacer(Modifier.height(10.dp))
-                PillButton("■  HUSH", C.Violet, modifier = Modifier.fillMaxWidth()) { ChronosEngine.hush() }
+        Box(Modifier.appear(1)) {
+            Panel {
+                Text2("HEARD", C.Dim, 10, spacing = 3)
+                Text2(if (heard.isBlank()) "—" else "“$heard”", C.Text, 13, maxLines = 2)
+                if (reply.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text2("REPLY", C.Dim, 10, spacing = 3)
+                    Text2(reply, C.Soft, 13, mono = false, maxLines = 3)
+                }
+                if (phase == Phase.SPEAKING) {
+                    Spacer(Modifier.height(10.dp))
+                    PillButton("■  HUSH", C.Violet, modifier = Modifier.fillMaxWidth()) { ChronosEngine.hush() }
+                }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ModeCard("COMBAT MODE", Icons.Filled.Warning, C.Red, combat, locked, Modifier.weight(1f)) { ChronosEngine.toggleCombat() }
-            ModeCard("QUANTUM FOCUS", Icons.Filled.Star, C.Violet, quantum, locked, Modifier.weight(1f)) { ChronosEngine.toggleQuantum() }
+        // ---- widgets: every button here can be removed, re-ordered or added ----
+        Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text2("WIDGETS", C.Cyan, 12, bold = true, spacing = 3)
+            Box(Modifier.weight(1f).height(1.dp).background(C.Line))
+            if (editing) Chip("RESET", false, C.Amber) { HomeLayout.reset() }
+            Chip(if (editing) "DONE" else "EDIT", editing, C.Green) { HomeLayout.editing = !editing }
         }
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Tile("WHISPER", if (whisper) "ON" else "OFF", "◌", C.Violet, whisper, Modifier.weight(1f)) { ChronosEngine.toggleWhisper() }
-            Tile("THIRD EYE", if (eye) "LIVE" else "OFF", "◉", C.Cyan, eye, Modifier.weight(1f)) { ChronosEngine.toggleEye() }
+        if (ids.isEmpty()) Text2("No widgets. Tap EDIT, then add some.", C.Dim, 13, mono = false)
+        ids.chunked(2).forEachIndexed { r, pair ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                pair.forEach { id ->
+                    key(id) { WidgetTile(id, ids.indexOf(id), ids.size, Modifier.weight(1f).appear(r + 2)) { renaming = it } }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        AnimatedVisibility(editing, enter = fadeIn(tween(250)) + expandVertically(tween(300)), exit = fadeOut(tween(150)) + shrinkVertically(tween(200))) {
+            Column(Modifier.fillMaxWidth()) {
+                val spare = Widgets.ALL.filter { it.id !in ids }
+                Text2(if (spare.isEmpty()) "Every widget is on your home screen." else "ADD A WIDGET", C.Soft, 11, spacing = 2)
+                Spacer(Modifier.height(8.dp))
+                spare.forEach { w ->
+                    Box(Modifier.padding(bottom = 8.dp)) {
+                        Panel {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text2(w.glyph, C.Cyan, 20, modifier = Modifier.padding(end = 12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text2(w.title(), C.Text, 12, bold = true, spacing = 1)
+                                    Text2(w.about, C.Soft, 11, mono = false)
+                                }
+                                Chip("+ ADD", false, C.Green) { HomeLayout.add(w.id) }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if (timers.isNotEmpty()) {
@@ -146,11 +185,13 @@ fun HomeScreen() {
         Panel {
             Text2("1.  Say “Chronos Lock” once. The button turns green.", C.Soft, 13, mono = false)
             Spacer(Modifier.height(4.dp))
-            Text2("2.  Now just say commands: “combat mode”, “set a timer for five minutes”, “what time is it”.", C.Soft, 13, mono = false)
+            Text2("2.  Now just say commands: “${Names.combat.lowercase(java.util.Locale.US)}”, “set a timer for five minutes”, “what time is it”.", C.Soft, 13, mono = false)
             Spacer(Modifier.height(4.dp))
-            Text2("3.  Say “open third eye” to chat with the A.I. Say “close third eye” to leave.", C.Soft, 13, mono = false)
+            Text2("3.  Say “open ${Names.eye.lowercase(java.util.Locale.US)}” to chat with the A.I. Say “close ${Names.eye.lowercase(java.util.Locale.US)}” to leave.", C.Soft, 13, mono = false)
             Spacer(Modifier.height(4.dp))
             Text2("4.  Speaking quietly? Say “whisper mode”.", C.Soft, 13, mono = false)
+            Spacer(Modifier.height(4.dp))
+            Text2("5.  Tap EDIT above to rearrange or add widgets. Open STYLE to rename modes and change the look.", C.Soft, 13, mono = false)
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -165,7 +206,7 @@ private fun LockButton(locked: Boolean, phase: Phase, onClick: () -> Unit) {
     val fast by t.animateFloat(360f, 0f, infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Restart), label = "fast")
 
     Box(
-        Modifier.size(250.dp).clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        Modifier.size(250.dp).pressable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -234,38 +275,6 @@ private fun WaveBars(phase: Phase, color: Color) {
     }
 }
 
-@Composable
-private fun ModeCard(label: String, icon: ImageVector, accent: Color, active: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val c = if (active) accent else C.Dim
-    val shape = RoundedCornerShape(18.dp)
-    Column(
-        modifier.clip(shape).background(c.copy(alpha = if (active) 0.16f else 0.06f))
-            .border(1.dp, c.copy(alpha = 0.7f), shape).clickable(onClick = onClick).padding(vertical = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(icon, null, tint = c, modifier = Modifier.size(28.dp))
-        Spacer(Modifier.height(8.dp))
-        Text2(label, c, 12, bold = true, spacing = 1)
-        Text2(if (active) "ACTIVE" else if (enabled) "OFFLINE" else "LOCKED OUT", c.copy(alpha = 0.7f), 10)
-    }
-}
-
-@Composable
-private fun Tile(label: String, state: String, glyph: String, accent: Color, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val c = if (active) accent else C.Dim
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        modifier.clip(shape).background(c.copy(alpha = if (active) 0.16f else 0.05f))
-            .border(1.dp, c.copy(alpha = 0.6f), shape).clickable(onClick = onClick).padding(vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text2(glyph, c, 22)
-        Spacer(Modifier.height(4.dp))
-        Text2(label, c, 10, bold = true, spacing = 1)
-        Text2(state, c.copy(alpha = 0.7f), 10)
-    }
-}
-
 // ============================ THIRD EYE ============================
 
 @Composable
@@ -296,9 +305,12 @@ fun EyeScreen() {
             Panel(accent = C.Amber, modifier = Modifier.padding(bottom = 10.dp)) {
                 Text2("NEEDS A FREE A.I. KEY", C.Amber, 12, bold = true, spacing = 1)
                 Spacer(Modifier.height(4.dp))
-                Text2("Third Eye talks to an online chatbot. Get a free key in a minute and paste it under System.", C.Soft, 12, mono = false)
+                Text2("${Names.eye} talks to an online chatbot. Getting a free key takes about two minutes. The guide walks you through it step by step.", C.Soft, 12, mono = false)
                 Spacer(Modifier.height(8.dp))
-                PillButton("OPEN SYSTEM", C.Amber) { ChronosEngine.tab.value = Screen.SYSTEM }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PillButton("STEP-BY-STEP GUIDE", C.Amber, filled = true) { ChronosEngine.tab.value = Screen.GUIDE }
+                    PillButton("OPEN SYSTEM", C.Amber) { ChronosEngine.tab.value = Screen.SYSTEM }
+                }
             }
         }
 
@@ -308,7 +320,7 @@ fun EyeScreen() {
                     Spacer(Modifier.height(28.dp))
                     Text2("◉", C.Violet, 54)
                     Spacer(Modifier.height(8.dp))
-                    Text2("THIRD EYE", C.Violet, 18, bold = true, spacing = 5)
+                    Text2(Names.eye.uppercase(java.util.Locale.US), C.Violet, 18, bold = true, spacing = 5)
                     Spacer(Modifier.height(6.dp))
                     Text2("Connect, then just talk — or type below. Every question is independent; nothing is remembered.", C.Soft, 13, mono = false, align = TextAlign.Center)
                     Spacer(Modifier.height(16.dp))
@@ -320,7 +332,7 @@ fun EyeScreen() {
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize(), state = list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    itemsIndexed(chat) { _, m -> Bubble(m) }
+                    itemsIndexed(chat) { i, m -> Box(Modifier.appear(0)) { Bubble(m) } }
                     if (phase == Phase.THINKING) item { Text2("● thinking…", C.Amber, 12, modifier = Modifier.padding(start = 4.dp)) }
                 }
             }
@@ -342,7 +354,7 @@ private fun Bubble(m: Msg) {
         Column(
             Modifier.widthIn(max = 300.dp).clip(shape).background(c.copy(alpha = 0.12f)).border(1.dp, c.copy(alpha = 0.5f), shape).padding(12.dp)
         ) {
-            Text2(if (m.fromUser) "YOU" else "THIRD EYE", c, 10, bold = true, spacing = 2)
+            Text2(if (m.fromUser) "YOU" else Names.eye.uppercase(java.util.Locale.US), c, 10, bold = true, spacing = 2)
             Spacer(Modifier.height(3.dp))
             Text2(m.text, C.Text, 14, mono = false)
         }

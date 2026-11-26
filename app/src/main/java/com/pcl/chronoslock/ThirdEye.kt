@@ -31,7 +31,21 @@ object ThirdEyeAI {
         "directly. Your reply is spoken aloud, so use one to three short plain sentences: no markdown, lists, " +
         "emojis or links. If you don't know something, say so."
 
-    private const val UA = "Mozilla/5.0 (Linux; Android 13) PCL/0.3.1"
+    /** Persona used when the user hasn't written their own. It always uses the chatbot's current name. */
+    fun defaultPersona(name: String) =
+        "You are $name, the conversational intelligence inside PCL (Project Chronos Lock), a personal " +
+        "voice-operated A.I. system running on the user's Android phone. You were activated by the voice command " +
+        "\"open $name\". Your voice is calm, confident and a little futuristic. You know exactly who you are: " +
+        "$name, the thinking core of PCL, and you never claim to be anyone else. Answer accurately and " +
+        "directly. Your reply is spoken aloud, so use one to three short plain sentences: no markdown, lists, " +
+        "emojis or links. If you don't know something, say so."
+
+    /** What is actually sent as the system prompt: the persona plus a reminder of the name. */
+    fun buildPersona(name: String, custom: String): String =
+        (if (custom.isBlank()) defaultPersona(name) else custom.trim()) +
+        " Your name is $name. If the user calls you $name, that is you; always answer to it."
+
+    private const val UA = "Mozilla/5.0 (Linux; Android 13) PCL/0.5.0"
 
     /** Presets. All speak the same OpenAI chat-completions protocol, so any one can be swapped in. */
     val PROVIDERS = listOf(

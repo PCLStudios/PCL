@@ -41,7 +41,7 @@ private fun open(ctx: android.content.Context, i: Intent) {
 fun HelpScreen() {
     var q by remember { mutableStateOf("") }
     val shown = Commands.all.filter {
-        q.isBlank() || it.phrase.contains(q, true) || it.help.contains(q, true) || it.cat.contains(q, true)
+        q.isBlank() || Names.rewrite(it.phrase).contains(q, true) || Names.rewrite(it.help).contains(q, true) || it.cat.contains(q, true)
     }
     val groups = shown.groupBy { it.cat }
     val locked by ChronosEngine.locked.collectAsState()
@@ -59,12 +59,12 @@ fun HelpScreen() {
             Field(q, { q = it }, "Search commands…", Modifier.fillMaxWidth())
         }
         groups.forEach { (cat, cmds) ->
-            item { SectionLabel(cat, cmds.size) }
+            item { SectionLabel(Names.rewrite(cat).uppercase(), cmds.size) }
             items(cmds) { c ->
                 Panel {
-                    Text2("“${c.phrase}”", C.Cyan, 13, bold = true)
+                    Text2("“${Names.rewrite(c.phrase)}”", C.Cyan, 13, bold = true)
                     Spacer(Modifier.height(4.dp))
-                    Text2(c.help, C.Soft, 12, mono = false)
+                    Text2(Names.rewrite(c.help), C.Soft, 12, mono = false)
                 }
             }
         }
@@ -102,12 +102,14 @@ fun VoiceScreen() {
         }
 
         Spacer(Modifier.height(10.dp))
+        MusicSafePanel()
+        Spacer(Modifier.height(10.dp))
         Panel(accent = if (keepMusic) C.Green else C.Line) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text2("KEEP MUSIC PLAYING", if (keepMusic) C.Green else C.Text, 14, bold = true, spacing = 1)
+                    Text2("KEEP MUSIC PLAYING (BACKUP TRICK)", if (keepMusic) C.Green else C.Text, 14, bold = true, spacing = 1)
                     Spacer(Modifier.height(4.dp))
-                    Text2("Android pauses music while the mic listens. This presses play again right after. Best effort: with ALWAYS OFF on the home screen the mic only opens when you engage, so music is left alone the rest of the time.", C.Soft, 12, mono = false)
+                    Text2("Only matters when the normal recogniser is used (whisper mode, the chatbot, or if the music-safe mic is not installed): it presses play again right after Android pauses your music.", C.Soft, 12, mono = false)
                 }
                 Spacer(Modifier.padding(6.dp))
                 Chip(if (keepMusic) "ON" else "OFF", keepMusic, C.Green) { ChronosEngine.setKeepMusic(!keepMusic) }
@@ -162,7 +164,7 @@ fun SystemScreen() {
     val provider = ThirdEyeAI.providerFor(url)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        ScreenTitle("SYSTEM", "Session, Third Eye A.I. and phone setup.")
+        ScreenTitle("SYSTEM", "Session, ${Names.eye} A.I. and phone setup.")
 
         SectionLabel("SESSION TIMEOUT")
         Text2("Auto-disengage Chronos Lock after this much silence. Off = stays engaged until you say “disengage”.", C.Soft, 12, mono = false)
@@ -173,8 +175,10 @@ fun SystemScreen() {
             }
         }
 
-        SectionLabel("THIRD EYE · A.I. PROVIDER")
-        Text2("Any OpenAI-compatible chatbot works. Pick a preset, paste its key, save.", C.Soft, 12, mono = false)
+        SectionLabel("${Names.eye.uppercase()} · A.I. PROVIDER")
+        Text2("Any OpenAI-compatible chatbot works. Pick a preset, paste its key, save. First time? The GUIDE explains every step.", C.Soft, 12, mono = false)
+        Spacer(Modifier.height(6.dp))
+        PillButton("STEP-BY-STEP SETUP GUIDE", C.Violet, filled = true, modifier = Modifier.fillMaxWidth()) { ChronosEngine.tab.value = Screen.GUIDE }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ThirdEyeAI.PROVIDERS.forEach { p ->
@@ -199,8 +203,8 @@ fun SystemScreen() {
         Text2("API KEY", C.Dim, 10, spacing = 2)
         Field(key, { key = it; saved = false }, "paste key here", Modifier.fillMaxWidth(), password = true)
         Spacer(Modifier.height(8.dp))
-        Text2("PERSONA  (who Third Eye believes she is)", C.Dim, 10, spacing = 2)
-        Field(persona, { persona = it; saved = false }, "persona", Modifier.fillMaxWidth(), singleLine = false, imeAction = ImeAction.Default)
+        Text2("PERSONA  (who ${Names.eye} believes she is. Leave empty for automatic: she uses her name.)", C.Dim, 10, spacing = 2)
+        Field(persona, { persona = it; saved = false }, ThirdEyeAI.defaultPersona(Names.eye), Modifier.fillMaxWidth(), singleLine = false, imeAction = ImeAction.Default)
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton(if (saved) "✓ SAVED" else "SAVE", C.Green, filled = true, modifier = Modifier.weight(1f)) {
@@ -213,7 +217,7 @@ fun SystemScreen() {
                     ChronosEngine.testAi { testResult = it; testing = false }
                 }
             }
-            PillButton("RESET PERSONA", C.Amber, modifier = Modifier.weight(1f)) { persona = ThirdEyeAI.DEFAULT_PERSONA; saved = false }
+            PillButton("AUTO PERSONA", C.Amber, modifier = Modifier.weight(1f)) { persona = ""; saved = false }
         }
         if (testResult.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
@@ -241,10 +245,66 @@ fun SystemScreen() {
         Spacer(Modifier.height(4.dp))
         Text2("Needed for PROGRAMS to open apps by voice with the screen off. Without it they only work while PCL is open.", C.Soft, 11, mono = false)
 
+        SectionLabel("BACKUP & SHARE")
+        var backupMsg by remember { mutableStateOf("") }
+        val clip = ctx.getSystemService(android.content.ClipboardManager::class.java)
+        Text2("Copy all your settings (names, theme, widgets, programs, notes) as text, and paste them back on another phone. Your API key is never included.", C.Soft, 12, mono = false)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton("COPY BACKUP", C.Cyan, modifier = Modifier.weight(1f)) {
+                clip.setPrimaryClip(android.content.ClipData.newPlainText("PCL backup", ChronosEngine.exportSettings())); backupMsg = "✓ Copied. Paste it somewhere safe."
+            }
+            PillButton("PASTE BACKUP", C.Cyan, modifier = Modifier.weight(1f)) {
+                val t = clip.primaryClip?.getItemAt(0)?.coerceToText(ctx)?.toString().orEmpty()
+                backupMsg = ChronosEngine.importSettings(t)?.let { "✗ $it" } ?: "✓ Backup restored."
+            }
+        }
+        if (backupMsg.isNotBlank()) { Spacer(Modifier.height(6.dp)); Text2(backupMsg, if (backupMsg.startsWith("✓")) C.Green else C.Red, 12, mono = false) }
+        Spacer(Modifier.height(8.dp))
+        PillButton("SHARE PCL WITH A FRIEND", C.Green, modifier = Modifier.fillMaxWidth()) { sharePcl(ctx) }
+
         SectionLabel("RESET")
         PillButton("DISENGAGE EVERYTHING", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.allOff() }
         Spacer(Modifier.height(16.dp))
-        Text2("PCL v0.4.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("PCL v0.5.0 · ${Commands.all.size} commands", C.Dim, 11)
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+
+@Composable
+private fun MusicSafePanel() {
+    val ctx = LocalContext.current
+    val st by VoskMic.state.collectAsState()
+    val prog by VoskMic.progress.collectAsState()
+    val msg by VoskMic.message.collectAsState()
+    val on by ChronosEngine.voskOn.collectAsState()
+    val ready = st == VoskMic.State.READY
+    Panel(accent = if (ready && on) C.Green else C.Line) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text2("MUSIC-SAFE MIC", if (ready && on) C.Green else C.Text, 14, bold = true, spacing = 1)
+                Spacer(Modifier.height(4.dp))
+                Text2("The real fix for music stopping. Reads the microphone without touching your music, so songs, podcasts and videos keep playing while she listens. Works offline.", C.Soft, 12, mono = false)
+            }
+            if (ready) { Spacer(Modifier.padding(6.dp)); Chip(if (on) "ON" else "OFF", on, C.Green) { ChronosEngine.setVoskOn(!on) } }
+        }
+        Spacer(Modifier.height(8.dp))
+        when (st) {
+            VoskMic.State.MISSING, VoskMic.State.ERROR -> {
+                if (st == VoskMic.State.ERROR && msg.isNotBlank()) { Text2(msg, C.Red, 12, mono = false); Spacer(Modifier.height(6.dp)) }
+                PillButton(if (st == VoskMic.State.ERROR) "RETRY DOWNLOAD" else "DOWNLOAD (ABOUT 40 MB, USE WI-FI)", C.Green, filled = true, modifier = Modifier.fillMaxWidth()) { ChronosEngine.downloadVosk() }
+            }
+            VoskMic.State.DOWNLOADING -> {
+                Text2(msg, C.Amber, 12)
+                Spacer(Modifier.height(6.dp))
+                androidx.compose.material3.LinearProgressIndicator(progress = { prog }, modifier = Modifier.fillMaxWidth(), color = C.Green, trackColor = C.Dim)
+            }
+            VoskMic.State.READY -> {
+                Text2(if (on) "● Active. Whisper mode and the chatbot still use Google's recogniser for accuracy." else "Installed but switched off.", C.Soft, 12, mono = false)
+                Spacer(Modifier.height(6.dp))
+                PillButton("REMOVE DOWNLOAD", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.deleteVosk() }
+            }
+        }
     }
 }
