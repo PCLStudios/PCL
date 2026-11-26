@@ -4,6 +4,13 @@ Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Packag
 User's goal: always-listening voice assistant "Chronos Lock" with combat/quantum modes, many voice commands, whisper
 understanding, fuzzy wake word, session-style locking, an online chatbot ("Third Eye"), and a nicer side-panel UI.
 
+## v0.6.0 (launch build)
+- AdMob: Ads.kt (UMP consent, banner on Guide/Style/About only, rewarded ad -> Pass = 24h Power Pass: >8 widgets, >6 steps/program, no banner).
+  App ID in manifest; live units hardcoded in AdConfig; About > DEVELOPER OPTIONS toggles TEST/LIVE ads (pref ads_test, default live).
+- Donations/About: Screens6.kt (Buy Me a Coffee, SOL + ETH addresses, GitHub PCLStudios, @pclglobal, privacy link). PRIVACY.md in repo root.
+- Material You default; unnamed MODE 1 / MODE 2 tiles with a pencil; lock widget; default TTS voice en-us-x-iob-network (once);
+  Credits.kt = base64 developer signature (About: tap version 7 times). Emoji glyphs replaced (◈ ◆ ◔).
+
 ## v0.5.0 changes (written, NOT yet compiled: CI is the compiler)
 - MUSIC FIX: VoskMic.kt = offline Vosk recogniser fed by AudioRecord (no audio focus => music never pauses). Model (~40 MB) is
   downloaded in-app (Voice > MUSIC-SAFE MIC). Used in listen() when installed, voskOn, not whisper, not chatbot mode; falls back to

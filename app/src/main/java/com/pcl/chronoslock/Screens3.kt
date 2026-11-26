@@ -66,6 +66,7 @@ private fun SlotEditor(label: String, accent: Color, slot: String) {
     val off by Flows.disabled.collectAsState()
     val enabled = slot !in off
     val ctx = LocalContext.current
+    var limit by remember { mutableStateOf(false) }
     Panel(accent = if (enabled) accent else C.Line) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text2(label, if (enabled) accent else C.Dim, 12, bold = true, spacing = 2, modifier = Modifier.weight(1f))
@@ -80,13 +81,17 @@ private fun SlotEditor(label: String, accent: Color, slot: String) {
         Text2("ADD A STEP", C.Dim, 10, spacing = 2)
         Spacer(Modifier.height(4.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Flows.TYPES.forEach { (t, l) -> Chip("+ $l", false, accent) { Flows.add(slot, t) } }
+            Flows.TYPES.forEach { (t, l) -> Chip("+ $l", false, accent) { if (!Flows.add(slot, t)) limit = true } }
         }
         Spacer(Modifier.height(8.dp))
         Text2("TEMPLATES", C.Dim, 10, spacing = 2)
         Spacer(Modifier.height(4.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Flows.TEMPLATES.forEach { (n, _) -> Chip(n, false, C.Green) { Flows.addTemplate(slot, n) } }
+            Flows.TEMPLATES.forEach { (n, _) -> Chip(n, false, C.Green) { if (!Flows.addTemplate(slot, n)) limit = true } }
+        }
+        if (limit && !Pass.active) {
+            Spacer(Modifier.height(10.dp))
+            PassNudge("Free programs hold ${Pass.FREE_STEPS} steps. Watch one short ad for a 24 hour Power Pass with unlimited steps.") { limit = false }
         }
         if (steps.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))

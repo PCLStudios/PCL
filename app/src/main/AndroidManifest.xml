@@ -31,6 +31,10 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.PCL">
 
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-8535931150252475~3626608488" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

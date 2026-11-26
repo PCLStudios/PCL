@@ -113,7 +113,11 @@ object Flows {
     }
 
     private fun save(slot: String) { prefs?.edit()?.putString("flow_$slot", toJson(get(slot)))?.apply() }
-    fun add(slot: String, type: String) { flows.getValue(slot).value = get(slot) + Step(nextId++, type); save(slot) }
+    /** @return false when the free limit of steps is reached (a Power Pass lifts it). */
+    fun add(slot: String, type: String): Boolean {
+        if (get(slot).size >= Pass.FREE_STEPS && !Pass.active) return false
+        flows.getValue(slot).value = get(slot) + Step(nextId++, type); save(slot); return true
+    }
     fun update(slot: String, s: Step) { flows.getValue(slot).value = get(slot).map { if (it.id == s.id) s else it }; save(slot) }
     fun remove(slot: String, id: Long) { flows.getValue(slot).value = get(slot).filter { it.id != id }; save(slot) }
     fun move(slot: String, id: Long, dir: Int) {
@@ -124,9 +128,10 @@ object Flows {
         val t = l[i]; l[i] = l[j]; l[j] = t
         flows.getValue(slot).value = l; save(slot)
     }
-    fun addTemplate(slot: String, name: String) {
-        val t = TEMPLATES.firstOrNull { it.first == name }?.second ?: return
-        flows.getValue(slot).value = get(slot) + t.map { it.copy(id = nextId++) }; save(slot)
+    fun addTemplate(slot: String, name: String): Boolean {
+        val t = TEMPLATES.firstOrNull { it.first == name }?.second ?: return true
+        if (get(slot).size + t.size > Pass.FREE_STEPS && !Pass.active) return false
+        flows.getValue(slot).value = get(slot) + t.map { it.copy(id = nextId++) }; save(slot); return true
     }
     fun setEnabled(slot: String, on: Boolean) {
         disabled.value = if (on) disabled.value - slot else disabled.value + slot

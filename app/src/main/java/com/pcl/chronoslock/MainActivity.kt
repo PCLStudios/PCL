@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ChronosEngine.init(this)
+        Ads.start(this)
         setContent { PclApp() }
     }
 
@@ -144,6 +145,7 @@ fun PclApp() {
                             Screen.STYLE -> StyleScreen()
                             Screen.VOICE -> VoiceScreen()
                             Screen.SYSTEM -> SystemScreen()
+                            Screen.ABOUT -> AboutScreen()
                         }
                     }
                 }
@@ -222,6 +224,6 @@ private fun SidePanel(current: Screen, onPick: (Screen) -> Unit) {
             Chip(if (locked) "DISENGAGE" else "ENGAGE", locked, C.Green) { ChronosEngine.toggleLock() }
         }
         Spacer(Modifier.height(14.dp))
-        Text2("v0.5.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("v0.6.0 · ${Commands.all.size} commands", C.Dim, 11)
     }
 }

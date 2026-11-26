@@ -34,7 +34,7 @@ import androidx.compose.ui.window.Dialog
 
 const val REPO_URL = "https://github.com/mindofzexer-lang/pcl-chronos-lock"
 
-private fun openUrl(ctx: android.content.Context, url: String) {
+internal fun openUrl(ctx: android.content.Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
@@ -182,8 +182,13 @@ fun GuideScreen() {
                 PillButton("SHARE PCL", C.Green, filled = true) { sharePcl(ctx) }
                 PillButton("GITHUB ★", C.Cyan) { openUrl(ctx, REPO_URL) }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                PillButton("BUY ME A COFFEE", C.Amber, filled = true) { openUrl(ctx, COFFEE_URL) }
+                PillButton("ABOUT", C.Soft) { ChronosEngine.tab.value = Screen.ABOUT }
+            }
             Body("Found a bug or have an idea? Open an issue on GitHub. Tapping the star helps other people find the app.")
         }
+        BannerAd()
         Spacer(Modifier.height(24.dp))
     }
 }

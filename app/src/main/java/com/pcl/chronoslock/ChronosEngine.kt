@@ -26,8 +26,8 @@ import java.util.Locale
 
 enum class Phase { STANDBY, LISTENING, SPEAKING, THINKING }
 enum class Screen(val label: String, val glyph: String) {
-    HOME("HOME", "◎"), EYE("CHATBOT", "◉"), FLOWS("PROGRAMS", "⚡"), NOTES("NOTES", "✎"), HELP("COMMANDS", "☰"),
-    GUIDE("GUIDE", "?"), STYLE("STYLE", "✦"), VOICE("VOICE", "♪"), SYSTEM("SYSTEM", "⚙");
+    HOME("HOME", "◎"), EYE("CHATBOT", "◉"), FLOWS("PROGRAMS", "◈"), NOTES("NOTES", "✎"), HELP("COMMANDS", "☰"),
+    GUIDE("GUIDE", "?"), STYLE("STYLE", "✦"), VOICE("VOICE", "♪"), SYSTEM("SYSTEM", "⚙"), ABOUT("ABOUT", "ⓘ");
     /** The chatbot screen shows the user's own name for it. */
     val title: String get() = if (this == EYE) Names.eye.uppercase(Locale.US) else label
 }
@@ -135,6 +135,7 @@ object ChronosEngine {
         ctx = context.applicationContext
         prefs = ctx!!.getSharedPreferences("pcl", Context.MODE_PRIVATE)
         loadPrefs()
+        Credits.announce()
         VoskMic.init(ctx!!)
         showIntro.value = !prefs.getBoolean("intro_done", false)
         // programs that run when these switch on/off
@@ -153,6 +154,7 @@ object ChronosEngine {
         keepMusic.value = prefs.getBoolean("keepMusic", true)
         voskOn.value = prefs.getBoolean("voskOn", true)
         Flows.init(prefs)
+        Pass.init(prefs)
         Names.init(prefs)
         Pal.init(prefs)
         HomeLayout.load(prefs)
@@ -172,7 +174,7 @@ object ChronosEngine {
     /** Settings as JSON text (the API key is left out on purpose so a shared backup never leaks it). */
     fun exportSettings(): String {
         val o = JSONObject()
-        for ((k, v) in prefs.all) { if (k == "aiKey" || k == "intro_done") continue; o.put(k, v) }
+        for ((k, v) in prefs.all) { if (k == "aiKey" || k == "intro_done" || k == "pass_until" || k == "ads_test") continue; o.put(k, v) }
         return o.toString()
     }
 
@@ -182,7 +184,7 @@ object ChronosEngine {
         if (o.length() == 0) return "The backup is empty."
         val ed = prefs.edit()
         for (k in o.keys()) {
-            if (k == "aiKey") continue
+            if (k == "aiKey" || k == "pass_until" || k == "ads_test" || k == "intro_done") continue
             if (k == "pitch" || k == "rate") { ed.putFloat(k, o.optDouble(k, 1.0).toFloat()); continue }
             when (val v = o.get(k)) {
                 is Boolean -> ed.putBoolean(k, v)
@@ -319,7 +321,12 @@ object ChronosEngine {
                 .thenByDescending { it.quality })
         voices.value = en.map { VoiceOpt(it.name, label(it)) }
         val saved = prefs.getString("voice", null)
-        (en.firstOrNull { it.name == saved } ?: en.firstOrNull())?.let { applyVoice(it) }
+        // default voice: Google's "iob" network voice (en-us-x-iob-network), chosen once; after that the user's own pick wins
+        val iob = en.firstOrNull { it.name.contains("x-iob-network", true) } ?: en.firstOrNull { it.name.contains("x-iob", true) }
+        val pick = if (!prefs.getBoolean("voice_iob_v6", false) && iob != null) {
+            prefs.edit().putBoolean("voice_iob_v6", true).apply(); iob
+        } else en.firstOrNull { it.name == saved } ?: iob ?: en.firstOrNull()
+        pick?.let { applyVoice(it) }
         t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
             override fun onDone(id: String?) { main.post { if (id == "pcl$utt" && speaking) finishSpeaking() } }

@@ -30,3 +30,7 @@ Voice defaults: Voice screen. A.I. persona: System screen.
 - **ALWAYS ON** (round button on Home): off = the mic only listens while the big button has engaged a session.
 - **PROGRAMS** (side panel): program steps that run when Combat Mode / Quantum Focus turn on or off (open an app, play a song, media key...).
 - For programs to open apps with the screen off: System > ALLOW OVER OTHER APPS.
+
+
+## Support PCL
+Buy me a coffee: https://buymeacoffee.com/pclstudios · GitHub: https://github.com/PCLStudios · X: @pclglobal · [Privacy policy](PRIVACY.md)

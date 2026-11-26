@@ -53,7 +53,7 @@ class WDef(val id: String, val glyph: String, val title: () -> String, val about
 class WState(val sub: String, val active: Boolean, val accent: Color)
 
 object HomeLayout {
-    val DEFAULT = listOf("combat", "quantum", "whisper", "eye")
+    val DEFAULT = listOf("lock", "torch", "combat", "quantum", "whisper", "eye")
     val ids = mutableStateListOf<String>()
     var editing by mutableStateOf(false)
     private var prefs: SharedPreferences? = null
@@ -66,7 +66,12 @@ object HomeLayout {
     }
     private fun save() { prefs?.edit()?.putString("home_widgets", ids.joinToString(","))?.apply() }
     fun remove(id: String) { ids.remove(id); save() }
-    fun add(id: String) { if (id !in ids) { ids.add(id); save() } }
+    /** @return false when the free limit of widgets is reached (a Power Pass lifts it). */
+    fun add(id: String): Boolean {
+        if (id in ids) return true
+        if (ids.size >= Pass.FREE_WIDGETS && !Pass.active) return false
+        ids.add(id); save(); return true
+    }
     fun move(id: String, dir: Int) {
         val i = ids.indexOf(id); val j = i + dir
         if (i < 0 || j < 0 || j >= ids.size) return
@@ -77,8 +82,9 @@ object HomeLayout {
 
 object Widgets {
     val ALL = listOf(
-        WDef("combat", "⚠", { Names.combat.uppercase(Locale.US) }, "Turns your combat mode on or off (runs its PROGRAM)."),
-        WDef("quantum", "★", { Names.quantum.uppercase(Locale.US) }, "Turns your focus mode on or off (runs its PROGRAM)."),
+        WDef("lock", "◎", { "CHRONOS LOCK" }, "Engage or disengage Chronos Lock with one tap, like the big button."),
+        WDef("combat", "◆", { if (Names.isDefault(Names.combat, Names.D_COMBAT)) "MODE 1" else Names.combat.uppercase(Locale.US) }, "Turns your combat mode on or off (runs its PROGRAM)."),
+        WDef("quantum", "★", { if (Names.isDefault(Names.quantum, Names.D_QUANTUM)) "MODE 2" else Names.quantum.uppercase(Locale.US) }, "Turns your focus mode on or off (runs its PROGRAM)."),
         WDef("whisper", "◌", { "WHISPER" }, "Listen harder for quiet speech."),
         WDef("eye", "◉", { Names.eye.uppercase(Locale.US) }, "Open or close the online chatbot."),
         WDef("torch", "☼", { "FLASHLIGHT" }, "Phone flashlight."),
@@ -88,11 +94,11 @@ object Widgets {
         WDef("volup", "+", { "VOLUME UP" }, "Raise media volume."),
         WDef("voldown", "−", { "VOLUME DOWN" }, "Lower media volume."),
         WDef("mute", "∅", { "MUTE" }, "Mute or unmute media."),
-        WDef("timer5", "⏱", { "5 MIN TIMER" }, "Start a five minute timer."),
+        WDef("timer5", "◔", { "5 MIN TIMER" }, "Start a five minute timer."),
         WDef("hush", "■", { "HUSH" }, "Stop her talking."),
         WDef("keepmusic", "♪", { "KEEP MUSIC" }, "Try to keep music playing while she listens."),
         WDef("notes", "✎", { "NOTES" }, "Open your notes."),
-        WDef("programs", "⚡", { "PROGRAMS" }, "Open the program editor."),
+        WDef("programs", "◈", { "PROGRAMS" }, "Open the program editor."),
         WDef("style", "✦", { "STYLE" }, "Themes, colours, fonts and names."),
         WDef("guide", "?", { "GUIDE" }, "Setup guide and help."),
         WDef("battery", "▮", { "BATTERY" }, "Battery level. Tap to hear it."),
@@ -121,6 +127,7 @@ object Widgets {
         var tick by remember { mutableStateOf(0) }
         if (id == "battery" || id == "clock") LaunchedEffect(id) { while (true) { delay(15_000); tick++ } }
         return when (id) {
+            "lock" -> WState(if (locked) "ENGAGED" else "STANDBY", locked, C.Green)
             "combat" -> WState(if (combat) "ACTIVE" else if (locked) "OFFLINE" else "LOCKED OUT", combat, C.Red)
             "quantum" -> WState(if (quantum) "ACTIVE" else if (locked) "OFFLINE" else "LOCKED OUT", quantum, C.Violet)
             "whisper" -> WState(if (whisper) "ON" else "OFF", whisper, C.Violet)
@@ -136,6 +143,7 @@ object Widgets {
     fun tap(ctx: Context, id: String) {
         val am = ctx.getSystemService(AudioManager::class.java)
         when (id) {
+            "lock" -> ChronosEngine.toggleLock()
             "combat" -> ChronosEngine.toggleCombat()
             "quantum" -> ChronosEngine.toggleQuantum()
             "whisper" -> ChronosEngine.toggleWhisper()
@@ -179,6 +187,7 @@ fun WidgetTile(id: String, index: Int, count: Int, modifier: Modifier, onRename:
     val shape = RoundedCornerShape(18.dp)
     val rot = wiggle(editing)
     val renamable = id == "combat" || id == "quantum" || id == "eye"
+    val unnamed = (id == "combat" && Names.isDefault(Names.combat, Names.D_COMBAT)) || (id == "quantum" && Names.isDefault(Names.quantum, Names.D_QUANTUM))
     Box(modifier.graphicsLayer { rotationZ = rot }) {
         Column(
             Modifier.fillMaxWidth()
@@ -190,7 +199,7 @@ fun WidgetTile(id: String, index: Int, count: Int, modifier: Modifier, onRename:
             Text2(def.glyph, c, 26)
             Spacer(Modifier.height(6.dp))
             Text2(def.title(), c, 11, bold = true, spacing = 1, maxLines = 1)
-            Text2(if (editing && renamable) "TAP TO RENAME" else st.sub, c.copy(alpha = 0.7f), 10)
+            Text2(if (editing && renamable) "TAP TO RENAME" else if (unnamed && !st.active) "NAME IT ✎" else st.sub, c.copy(alpha = 0.7f), 10)
             if (editing) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -198,6 +207,13 @@ fun WidgetTile(id: String, index: Int, count: Int, modifier: Modifier, onRename:
                     MiniBtn("›", index < count - 1) { HomeLayout.move(id, 1) }
                 }
             }
+        }
+        if (unnamed && !editing) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(6.dp).size(28.dp).clip(CircleShape).border(1.dp, c, CircleShape)
+                    .clickable { onRename?.invoke(id) },
+                contentAlignment = Alignment.Center
+            ) { Text2("✎", c, 14, bold = true) }
         }
         if (editing) {
             Box(

@@ -81,6 +81,7 @@ fun HomeScreen() {
     val reply by ChronosEngine.lastReply.collectAsState()
     val timers by ChronosEngine.timers.collectAsState()
     var renaming by remember { mutableStateOf<String?>(null) }
+    var widgetLimit by remember { mutableStateOf(false) }
     val editing = HomeLayout.editing
     val ids = HomeLayout.ids.toList()
 
@@ -145,6 +146,10 @@ fun HomeScreen() {
         AnimatedVisibility(editing, enter = fadeIn(tween(250)) + expandVertically(tween(300)), exit = fadeOut(tween(150)) + shrinkVertically(tween(200))) {
             Column(Modifier.fillMaxWidth()) {
                 val spare = Widgets.ALL.filter { it.id !in ids }
+                if (widgetLimit && !Pass.active) {
+                    PassNudge("Free home screens hold ${Pass.FREE_WIDGETS} widgets. Watch one short ad for a 24 hour Power Pass with unlimited widgets.") { widgetLimit = false }
+                    Spacer(Modifier.height(10.dp))
+                }
                 Text2(if (spare.isEmpty()) "Every widget is on your home screen." else "ADD A WIDGET", C.Soft, 11, spacing = 2)
                 Spacer(Modifier.height(8.dp))
                 spare.forEach { w ->
@@ -156,7 +161,7 @@ fun HomeScreen() {
                                     Text2(w.title(), C.Text, 12, bold = true, spacing = 1)
                                     Text2(w.about, C.Soft, 11, mono = false)
                                 }
-                                Chip("+ ADD", false, C.Green) { HomeLayout.add(w.id) }
+                                Chip("+ ADD", false, C.Green) { if (!HomeLayout.add(w.id)) widgetLimit = true }
                             }
                         }
                     }

@@ -189,6 +189,7 @@ fun StyleScreen() {
                 Chip("OFF", false) {}
             }
         }
+        BannerAd()
         Spacer(Modifier.height(24.dp))
     }
 }

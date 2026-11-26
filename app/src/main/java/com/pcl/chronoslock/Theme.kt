@@ -117,7 +117,7 @@ object Pal {
         accentIdx = p.getInt("th_accent", 0).coerceIn(0, ACCENTS.lastIndex)
         fontIdx = p.getInt("th_font", 0).coerceIn(0, FONTS.lastIndex)
         glass = p.getBoolean("th_glass", false)
-        dynamic = p.getBoolean("th_dynamic", false)
+        dynamic = p.getBoolean("th_dynamic", true) && dynamicSupported
         anim = p.getBoolean("th_anim", true)
     }
 

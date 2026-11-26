@@ -12,8 +12,8 @@ android {
         applicationId = "com.pcl.chronoslock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.6.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
@@ -36,6 +36,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.compose.animation:animation")
+    // Ads (AdMob) + the EU/UK consent form
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    implementation("com.google.android.ump:user-messaging-platform:3.0.0")
     implementation("androidx.core:core-ktx:1.13.1")
     // Offline speech recogniser: reads the mic directly (no audio focus), so music keeps playing
     implementation("net.java.dev.jna:jna:5.13.0@aar")
