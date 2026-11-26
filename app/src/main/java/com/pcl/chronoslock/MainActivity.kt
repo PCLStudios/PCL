@@ -126,6 +126,7 @@ fun PclApp() {
         AppBackground {
             Column(Modifier.fillMaxSize()) {
                 TopBar(tab.title) { scope.launch { drawer.open() } }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line.copy(alpha = 0.6f)))
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     AnimatedContent(
                         targetState = tab,
@@ -177,7 +178,7 @@ private fun TopBar(title: String, onMenu: () -> Unit) {
             phase == Phase.SPEAKING -> "SPEAKING" to C.Violet
             phase == Phase.THINKING -> "THINKING" to C.Amber
             eye -> Names.eye.uppercase(Locale.US).take(10) to C.Violet
-            locked -> "ENGAGED" to C.Green
+            locked -> "ACTIVE" to C.Green
             else -> "STANDBY" to C.Dim
         }
         Box(Modifier.size(8.dp).clip(CircleShape).background(col))
@@ -197,7 +198,7 @@ private fun SidePanel(current: Screen, onPick: (Screen) -> Unit) {
         Text2("PROJECT CHRONOS LOCK", C.Dim, 11, spacing = 4)
         Spacer(Modifier.height(14.dp))
         Panel(accent = if (locked) C.Green else C.Line) {
-            Text2(if (locked) "● CHRONOS LOCK ENGAGED" else "○ STANDBY", if (locked) C.Green else C.Soft, 12, bold = true, spacing = 1)
+            Text2(if (locked) "● CHRONOS LOCK ACTIVE" else "○ STANDBY", if (locked) C.Green else C.Soft, 12, bold = true, spacing = 1)
             Spacer(Modifier.height(4.dp))
             Text2(if (locked) "Commands need no wake word." else "Say “Chronos Lock” to begin.", C.Soft, 12, mono = false)
         }
@@ -221,9 +222,9 @@ private fun SidePanel(current: Screen, onPick: (Screen) -> Unit) {
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Chip("WHISPER", whisper, C.Violet) { ChronosEngine.toggleWhisper() }
-            Chip(if (locked) "DISENGAGE" else "ENGAGE", locked, C.Green) { ChronosEngine.toggleLock() }
+            Chip(if (locked) "DEACTIVATE" else "ACTIVATE", locked, C.Green) { ChronosEngine.toggleLock() }
         }
         Spacer(Modifier.height(14.dp))
-        Text2("v0.6.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("v1.0.0 · ${Commands.all.size} commands", C.Dim, 11)
     }
 }

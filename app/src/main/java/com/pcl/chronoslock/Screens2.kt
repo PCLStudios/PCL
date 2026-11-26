@@ -51,7 +51,7 @@ fun HelpScreen() {
             ScreenTitle("COMMANDS", "${Commands.all.size} commands. Say “Chronos Lock” once, then just say them — no wake word needed.")
             Panel(accent = if (locked) C.Green else C.Amber) {
                 Text2(
-                    if (locked) "● ENGAGED — say any command below directly." else "○ NOT ENGAGED — say “Chronos Lock” first (or “Chronos Lock, <command>” in one go).",
+                    if (locked) "● ACTIVE — say any command below directly." else "○ NOT ACTIVE — say “Chronos Lock” first (or “Chronos Lock, <command>” in one go).",
                     if (locked) C.Green else C.Amber, 12, bold = true
                 )
             }
@@ -167,7 +167,7 @@ fun SystemScreen() {
         ScreenTitle("SYSTEM", "Session, ${Names.eye} A.I. and phone setup.")
 
         SectionLabel("SESSION TIMEOUT")
-        Text2("Auto-disengage Chronos Lock after this much silence. Off = stays engaged until you say “disengage”.", C.Soft, 12, mono = false)
+        Text2("Auto-deactivate Chronos Lock after this much silence. Off = stays active until you say “deactivate”.", C.Soft, 12, mono = false)
         Spacer(Modifier.height(8.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(0 to "OFF", 2 to "2 MIN", 5 to "5 MIN", 15 to "15 MIN", 30 to "30 MIN", 60 to "1 HOUR").forEach { (m, l) ->
@@ -264,9 +264,9 @@ fun SystemScreen() {
         PillButton("SHARE PCL WITH A FRIEND", C.Green, modifier = Modifier.fillMaxWidth()) { sharePcl(ctx) }
 
         SectionLabel("RESET")
-        PillButton("DISENGAGE EVERYTHING", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.allOff() }
+        PillButton("DEACTIVATE EVERYTHING", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.allOff() }
         Spacer(Modifier.height(16.dp))
-        Text2("PCL v0.6.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("PCL v1.0.0 · ${Commands.all.size} commands", C.Dim, 11)
         Spacer(Modifier.height(24.dp))
     }
 }

@@ -45,7 +45,7 @@ fun FlowsScreen() {
         }
         FlowBlock(Names.combat.uppercase(Locale.US), C.Red, "combat", "TURNED ON", "TURNED OFF")
         FlowBlock(Names.quantum.uppercase(Locale.US), C.Violet, "quantum", "TURNED ON", "TURNED OFF")
-        FlowBlock("CHRONOS LOCK", C.Green, "lock", "ENGAGED", "DISENGAGED")
+        FlowBlock("CHRONOS LOCK", C.Green, "lock", "ACTIVATED", "DEACTIVATED")
         FlowBlock(Names.eye.uppercase(Locale.US), C.Cyan, "eye", "OPENED", "CLOSED")
         FlowBlock("WHISPER MODE", C.Amber, "whisper", "TURNED ON", "TURNED OFF")
         Spacer(Modifier.height(24.dp))

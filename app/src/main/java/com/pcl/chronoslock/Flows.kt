@@ -80,7 +80,7 @@ object Flows {
 
     val TEMPLATES: List<Pair<String, List<Step>>> = listOf(
         "FOCUS" to listOf(
-            Step(0, SAY, "Focus engaged. Silencing distractions."), Step(0, VOLUME, "35"),
+            Step(0, SAY, "Focus activated. Silencing distractions."), Step(0, VOLUME, "35"),
             Step(0, PLAY, "lofi focus beats\ndeep focus music\nbrown noise", delay = 2)
         ),
         "WORKOUT" to listOf(
@@ -296,7 +296,7 @@ object Flows {
     }
 
     private fun switchMode(a: String) {
-        val on = !(a.contains("off") || a.contains("disengage") || a.contains("stop"))
+        val on = !(a.contains("off") || a.contains("disengage") || a.contains("deactivate") || a.contains("stop"))
         when {
             a.contains("combat") -> ChronosEngine.setCombat(on)
             a.contains("quantum") -> ChronosEngine.setQuantum(on)

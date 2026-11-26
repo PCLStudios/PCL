@@ -2,6 +2,7 @@ package com.pcl.chronoslock
 
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -100,13 +101,15 @@ fun HomeScreen() {
             phase == Phase.SPEAKING -> "SPEAKING" to C.Violet
             phase == Phase.THINKING -> "THINKING…" to C.Amber
             eye -> "$eyeName · TALK TO ME" to C.Violet
-            locked && whisper -> "ENGAGED · WHISPER MODE" to C.Green
-            locked -> "ENGAGED · SAY A COMMAND" to C.Green
+            locked && whisper -> "ACTIVE · WHISPER MODE" to C.Green
+            locked -> "ACTIVE · SAY A COMMAND" to C.Green
             !alwaysOn -> "MIC OFF · TAP THE BUTTON TO LISTEN" to C.Soft
             whisper -> "STANDBY · WHISPER “CHRONOS LOCK”" to C.Soft
             else -> "STANDBY · SAY “CHRONOS LOCK”" to C.Soft
         }
-        Text2(status, col, 13, bold = true, spacing = 2, align = TextAlign.Center)
+        Crossfade(targetState = status to col, animationSpec = tween(250), label = "status") { (st, cl) ->
+            Text2(st, cl, 13, bold = true, spacing = 2, align = TextAlign.Center)
+        }
         Spacer(Modifier.height(10.dp))
         WaveBars(phase, if (locked) C.Green else C.Cyan)
         Spacer(Modifier.height(10.dp))
@@ -123,6 +126,33 @@ fun HomeScreen() {
                 if (phase == Phase.SPEAKING) {
                     Spacer(Modifier.height(10.dp))
                     PillButton("■  HUSH", C.Violet, modifier = Modifier.fillMaxWidth()) { ChronosEngine.hush() }
+                }
+            }
+        }
+
+        // ---- music-safe mic prompt (the fix for media being paused) ----
+        val vst by VoskMic.state.collectAsState()
+        val vprog by VoskMic.progress.collectAsState()
+        val vmsg by VoskMic.message.collectAsState()
+        val hideCard by ChronosEngine.hideVoskCard.collectAsState()
+        if (vst != VoskMic.State.READY && !hideCard) {
+            Box(Modifier.padding(top = 14.dp).appear(2)) {
+                Panel(accent = C.Amber) {
+                    Text2("MUSIC OR VIDEOS STOPPING?", C.Amber, 12, bold = true, spacing = 2)
+                    Spacer(Modifier.height(4.dp))
+                    Text2("Android pauses your media every time a voice assistant listens. Install the music-safe mic once (about 40 MB, works offline) and PCL never touches your music again.", C.Soft, 12, mono = false)
+                    Spacer(Modifier.height(8.dp))
+                    if (vst == VoskMic.State.DOWNLOADING) {
+                        Text2(vmsg, C.Amber, 12)
+                        Spacer(Modifier.height(6.dp))
+                        androidx.compose.material3.LinearProgressIndicator(progress = { vprog }, modifier = Modifier.fillMaxWidth(), color = C.Amber, trackColor = C.Dim)
+                    } else {
+                        if (vst == VoskMic.State.ERROR && vmsg.isNotBlank()) { Text2(vmsg, C.Red, 12, mono = false); Spacer(Modifier.height(6.dp)) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PillButton(if (vst == VoskMic.State.ERROR) "RETRY" else "INSTALL (USE WI-FI)", C.Amber, filled = true, modifier = Modifier.weight(1f)) { ChronosEngine.downloadVosk() }
+                            PillButton("HIDE", C.Soft) { ChronosEngine.hideVoskCard() }
+                        }
+                    }
                 }
             }
         }
@@ -235,8 +265,8 @@ private fun LockButton(locked: Boolean, phase: Phase, onClick: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Filled.Lock, null, tint = color, modifier = Modifier.size(48.dp))
             Spacer(Modifier.height(8.dp))
-            Text2(if (locked) "ENGAGED" else "DISENGAGED", color, 12, bold = true, spacing = 2)
-            Text2(if (locked) "tap to disengage" else "tap to engage", C.Soft, 10, mono = false)
+            Text2(if (locked) "ACTIVE" else "INACTIVE", color, 12, bold = true, spacing = 2)
+            Text2(if (locked) "tap to deactivate" else "tap to activate", C.Soft, 10, mono = false)
         }
     }
 }

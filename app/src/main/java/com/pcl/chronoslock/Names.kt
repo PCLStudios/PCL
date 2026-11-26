@@ -95,10 +95,10 @@ object Names {
 
     // ---- what she says ----
     fun combatReply(on: Boolean) =
-        if (isDefault(combat, D_COMBAT)) (if (on) "Combat mode has been engaged" else "Combat mode has been disengaged")
+        if (isDefault(combat, D_COMBAT)) (if (on) "Combat mode activated" else "Combat mode deactivated")
         else "$combat " + (if (on) "activated" else "deactivated")
     fun quantumReply(on: Boolean) =
-        if (isDefault(quantum, D_QUANTUM)) (if (on) "Quantum focus has been approved" else "Quantum focus has been disengaged")
+        if (isDefault(quantum, D_QUANTUM)) (if (on) "Quantum focus activated" else "Quantum focus deactivated")
         else "$quantum " + (if (on) "activated" else "deactivated")
 
     /** Swaps the default names inside help text for the user's own. */

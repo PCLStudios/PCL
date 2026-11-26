@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -233,6 +234,7 @@ fun Modifier.card(shape: Shape, accent: Color = C.Line, tint: Float = 0.07f, bor
             .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = edge), accent.copy(alpha = if (strong) 0.5f else 0.1f))), shape)
     } else {
         this.clip(shape).background(accent.copy(alpha = tint).compositeOver(C.Panel))
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (Pal.isLight) 0f else 0.04f), Color.Transparent)))
             .border(1.dp, accent.copy(alpha = borderAlpha ?: if (strong) 0.55f else 1f), shape)
     }
 }
@@ -262,7 +264,9 @@ fun AppBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.(
 @Composable
 fun ScreenTitle(title: String, sub: String? = null) {
     Column(Modifier.padding(bottom = 12.dp).appear()) {
-        Text2(title, C.Cyan, 22, bold = true, spacing = 4)
+        Text2(title, C.Cyan, 24, bold = true, spacing = 4)
+        Spacer(Modifier.height(6.dp))
+        Box(Modifier.size(width = 36.dp, height = 3.dp).clip(RoundedCornerShape(50)).background(C.Cyan))
         if (sub != null) { Spacer(Modifier.height(4.dp)); Text2(sub, C.Soft, 13, mono = false) }
     }
 }
@@ -278,18 +282,18 @@ fun Text2(text: String, color: Color, size: Int, bold: Boolean = false, spacing:
 
 @Composable
 fun Panel(modifier: Modifier = Modifier, accent: Color = C.Line, content: @Composable ColumnScope.() -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(20.dp)
     val a by animateColorAsState(accent, tween(300), label = "panelAccent")
-    Column(modifier.fillMaxWidth().card(shape, a).padding(14.dp), content = content)
+    Column(modifier.fillMaxWidth().card(shape, a).padding(16.dp), content = content)
 }
 
 @Composable
 fun PillButton(text: String, accent: Color = C.Cyan, filled: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     val a by animateColorAsState(accent, tween(300), label = "pillAccent")
     Box(
         modifier.pressable(onClick = onClick).clip(shape).background(if (filled) a.copy(alpha = 0.22f) else Color.Transparent)
-            .border(1.dp, a, shape).padding(horizontal = 16.dp, vertical = 12.dp),
+            .border(1.dp, a, shape).padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) { Text2(text, a, 13, bold = true, spacing = 1, align = TextAlign.Center) }
 }
@@ -307,7 +311,7 @@ fun Chip(text: String, on: Boolean, accent: Color = C.Cyan, onClick: () -> Unit)
 
 @Composable
 fun SectionLabel(text: String, count: Int? = null) {
-    Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text2(text, C.Cyan, 12, bold = true, spacing = 3)
         if (count != null) { Spacer(Modifier.padding(start = 8.dp)); Text2("$count", C.Dim, 11) }
         Box(Modifier.padding(start = 10.dp).weight(1f).height(1.dp).background(C.Line))

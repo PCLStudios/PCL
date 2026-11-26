@@ -7,10 +7,12 @@ package com.pcl.chronoslock
  */
 object Wake {
     private val CHRONOS = setOf("chronos", "kronos", "cronos", "chrono", "kronus", "cronus", "chronus", "krono", "crono",
-        "chronis", "kronis", "chronas", "kronas", "cronas", "chronoss", "chronose")
+        "chronis", "kronis", "chronas", "kronas", "cronas", "chronoss", "chronose", "kronoss", "cronys", "chronys")
     private val NOT = setOf("chronic", "chronicle", "chronicles", "chronically", "chronicled", "crooner", "crowns")
     private val LOCKS = setOf("lock", "locks", "locked", "luck", "lark", "look", "lack", "clock", "clocks", "lok", "loch",
-        "lurk", "lick", "lug", "lak", "lek", "log", "block")
+        "lurk", "lick", "lug", "lak", "lek", "log", "block", "lot", "lord", "luke", "lax")
+    /** Words that are normally something else, but "<word> lock" in a row is almost certainly the wake phrase. */
+    private val PAIR_ONLY = setOf("chronic", "crowns", "crown", "crowns", "crooner", "cronies", "chronicle")
 
     fun lev(a: String, b: String): Int {
         if (a == b) return 0
@@ -34,7 +36,8 @@ object Wake {
     }
 
     /** Clear enough to wake on its own, without "lock". */
-    private fun strong(w: String) = w in CHRONOS || (w.length >= 6 && w !in NOT && CHRONOS.any { lev(w, it) <= 1 })
+    private fun strong(w: String) = w in CHRONOS || (w.length >= 6 && w !in NOT && CHRONOS.any { lev(w, it) <= 1 }) ||
+        (w.length >= 6 && w !in NOT && (w[0] == 'c' || w[0] == 'k') && w.contains("ron") && lev(w, "chronos") <= 2)
 
     fun isLock(w: String) = w in LOCKS || (w.length in 3..5 && lev(w, "lock") <= 1)
 
@@ -51,7 +54,8 @@ object Wake {
                 val joined = t.subList(i, i + span).joinToString("")
                 if (joined.length >= 8 && lev(joined, "chronoslock") <= maxD) return i + span - 1
             }
-            if (i + 1 < t.size && isChronos(t[i], loose) && isLock(t[i + 1])) return i + 1
+            if (i + 1 < t.size && (isChronos(t[i], loose) || t[i] in PAIR_ONLY) && isLock(t[i + 1])) return i + 1
+            if (i + 2 < t.size && t[i] == "crow" && (t[i + 1] == "nose" || t[i + 1] == "knows") && isLock(t[i + 2])) return i + 2
             if (i + 2 < t.size && isChronos(t[i] + t[i + 1], loose) && isLock(t[i + 2])) return i + 2
             if (strong(t[i])) return i
         }

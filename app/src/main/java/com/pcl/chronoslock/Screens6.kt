@@ -62,24 +62,33 @@ fun AboutScreen() {
     val ctx = LocalContext.current
     val act = ctx.findActivity()
     var taps by remember { mutableStateOf(0) }
-    var egg by remember { mutableStateOf(false) }
+    var hint by remember { mutableStateOf("") }
+    var privacy by remember { mutableStateOf(false) }
+    if (privacy) PrivacyDialog { privacy = false }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         ScreenTitle("ABOUT", "Made by PCL Studios.")
         Panel(accent = C.Cyan) {
-            Text2("PROJECT CHRONOS LOCK", C.Cyan, 16, bold = true, spacing = 3)
+            // tap the title a few times, like Android's build number, to reveal developer options
+            Text2("PROJECT CHRONOS LOCK", C.Cyan, 16, bold = true, spacing = 3, modifier = Modifier.clickable {
+                if (Ads.devUnlocked) hint = "Developer options are already on."
+                else {
+                    taps++
+                    val left = 7 - taps
+                    if (left <= 0) { Ads.unlockDev(true); hint = "You are now a developer." }
+                    else if (taps >= 3) hint = "$left more taps to turn on developer options"
+                }
+            })
             Spacer(Modifier.height(4.dp))
-            Text2("v0.6.0 · ${Commands.all.size} commands", C.Dim, 11, modifier = Modifier.clickable { taps++; if (taps >= 7) egg = true })
+            Text2("v1.0.0 · ${Commands.all.size} commands", C.Dim, 11)
+            if (hint.isNotBlank()) { Spacer(Modifier.height(4.dp)); Text2(hint, C.Amber, 11, mono = false) }
             Spacer(Modifier.height(8.dp))
             Text2("A voice-first assistant for your phone: say “Chronos Lock”, run commands and automations, keep your music playing and talk to an A.I. chatbot you can rename. No account, no sign-up, open source.", C.Soft, 13, mono = false)
-            if (egg) { Spacer(Modifier.height(8.dp)); Text2(Credits.signature(), C.Green, 11, mono = false) }
         }
 
         SectionLabel("FIND US")
         LinkRow("GITHUB", "github.com/PCLStudios", C.Cyan, GITHUB_URL)
         Spacer(Modifier.height(8.dp))
         LinkRow("X (TWITTER)", "@pclglobal", C.Cyan, TWITTER_URL)
-        Spacer(Modifier.height(8.dp))
-        LinkRow("SOURCE CODE", "Star the project, report bugs, suggest ideas", C.Soft, REPO_URL)
 
         SectionLabel("SUPPORT PCL")
         Panel(accent = C.Amber) {
@@ -110,23 +119,61 @@ fun AboutScreen() {
             Text2("PCL listens through your microphone only while it is running, and speech is handled on your phone unless you use Google's recogniser or the chatbot. The privacy policy explains what is shared, including how ads work.", C.Soft, 12, mono = false)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PillButton("PRIVACY POLICY", C.Cyan) { openUrl(ctx, PRIVACY_URL) }
+                PillButton("PRIVACY POLICY", C.Cyan) { privacy = true }
                 PillButton("SHARE PCL", C.Green) { sharePcl(ctx) }
             }
         }
 
-        SectionLabel("DEVELOPER OPTIONS")
-        Panel {
-            Text2("If you are trying the app on your own phone, switch to TEST ADS. Never tap live ads on your own device: Google can ban the ad account for it.", C.Soft, 12, mono = false)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("TEST ADS", Ads.testMode, C.Amber) { act?.let { Ads.setTestMode(true, it) } }
-                Chip("LIVE ADS", !Ads.testMode, C.Green) { act?.let { Ads.setTestMode(false, it) } }
+        if (Ads.devUnlocked) {
+            SectionLabel("DEVELOPER OPTIONS")
+            Panel(accent = C.Amber) {
+                Text2("Ad mode. Use TEST ADS while you try the app on your own phone. Never tap live ads on your own device: Google can ban the ad account for it.", C.Soft, 12, mono = false)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip("TEST ADS", Ads.testMode, C.Amber) { act?.let { Ads.setTestMode(true, it) } }
+                    Chip("LIVE ADS", !Ads.testMode, C.Green) { act?.let { Ads.setTestMode(false, it) } }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text2(Credits.signature(), C.Dim, 10, mono = false)
+                Spacer(Modifier.height(8.dp))
+                Chip("HIDE DEVELOPER OPTIONS", false, C.Soft) { Ads.unlockDev(false); taps = 0; hint = "" }
             }
         }
         BannerAd()
         Spacer(Modifier.height(12.dp))
         Text2("© PCL Studios", C.Dim, 11, modifier = Modifier.fillMaxWidth(), align = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+
+/** The privacy policy, shown inside the app so it always works. */
+@Composable
+fun PrivacyDialog(onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Panel(accent = C.Cyan) {
+            Text2("PRIVACY POLICY", C.Cyan, 14, bold = true, spacing = 3)
+            Spacer(Modifier.height(8.dp))
+            Column(Modifier.height(380.dp).verticalScroll(rememberScrollState())) {
+                val parts = listOf(
+                    "WHAT PCL IS" to "A voice assistant for Android by PCL Studios. No accounts, no PCL server, and we don't collect your name, email or location.",
+                    "MICROPHONE" to "PCL listens only while its listening service runs (shown by a notification). With the music-safe mic (optional download) speech is recognised on your phone, offline. Whisper mode, the chatbot and the fallback use Android's / Google's speech recogniser, so Google's privacy policy applies to that audio.",
+                    "CHATBOT" to "What you say to the chatbot is sent as text to the A.I. provider you choose (Groq, Google, OpenRouter, etc.) with your own API key. Their policies apply. Your key stays on your phone and is never included in backups.",
+                    "STORED ON YOUR PHONE" to "Settings, names, theme, widgets, programs, notes and your API key stay in PCL's private storage.",
+                    "ADS" to "PCL shows ads through Google AdMob: a small banner and optional rewarded ads. AdMob may use your device's advertising ID to serve and measure ads. Where required (EU/UK and others) you are asked for consent first. A 24 hour Power Pass hides banners. See policies.google.com/technologies/ads",
+                    "DONATIONS" to "Handled by Buy Me a Coffee or sent to the public crypto addresses in About. PCL does not process payments.",
+                    "CHILDREN" to "PCL is not directed to children under 13.",
+                    "CONTACT" to "github.com/PCLStudios or @pclglobal on X."
+                )
+                parts.forEach { (h, t) ->
+                    Text2(h, C.Soft, 10, bold = true, spacing = 2)
+                    Spacer(Modifier.height(2.dp))
+                    Text2(t, C.Text, 12, mono = false)
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            PillButton("CLOSE", C.Cyan, filled = true, modifier = Modifier.fillMaxWidth()) { onDismiss() }
+        }
     }
 }

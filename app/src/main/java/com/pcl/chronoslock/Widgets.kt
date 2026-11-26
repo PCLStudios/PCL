@@ -8,6 +8,8 @@ import android.media.AudioManager
 import android.os.BatteryManager
 import android.view.KeyEvent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.shadow
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -82,7 +84,7 @@ object HomeLayout {
 
 object Widgets {
     val ALL = listOf(
-        WDef("lock", "◎", { "CHRONOS LOCK" }, "Engage or disengage Chronos Lock with one tap, like the big button."),
+        WDef("lock", "◎", { "CHRONOS LOCK" }, "Activate or deactivate Chronos Lock with one tap, like the big button."),
         WDef("combat", "◆", { if (Names.isDefault(Names.combat, Names.D_COMBAT)) "MODE 1" else Names.combat.uppercase(Locale.US) }, "Turns your combat mode on or off (runs its PROGRAM)."),
         WDef("quantum", "★", { if (Names.isDefault(Names.quantum, Names.D_QUANTUM)) "MODE 2" else Names.quantum.uppercase(Locale.US) }, "Turns your focus mode on or off (runs its PROGRAM)."),
         WDef("whisper", "◌", { "WHISPER" }, "Listen harder for quiet speech."),
@@ -127,7 +129,7 @@ object Widgets {
         var tick by remember { mutableStateOf(0) }
         if (id == "battery" || id == "clock") LaunchedEffect(id) { while (true) { delay(15_000); tick++ } }
         return when (id) {
-            "lock" -> WState(if (locked) "ENGAGED" else "STANDBY", locked, C.Green)
+            "lock" -> WState(if (locked) "ACTIVE" else "STANDBY", locked, C.Green)
             "combat" -> WState(if (combat) "ACTIVE" else if (locked) "OFFLINE" else "LOCKED OUT", combat, C.Red)
             "quantum" -> WState(if (quantum) "ACTIVE" else if (locked) "OFFLINE" else "LOCKED OUT", quantum, C.Violet)
             "whisper" -> WState(if (whisper) "ON" else "OFF", whisper, C.Violet)
@@ -184,11 +186,12 @@ fun WidgetTile(id: String, index: Int, count: Int, modifier: Modifier, onRename:
     val st = Widgets.state(id)
     val editing = HomeLayout.editing
     val c by animateColorAsState(if (st.active) st.accent else C.Dim, tween(300), label = "tileC")
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(20.dp)
+    val glow by animateFloatAsState(if (st.active) 14f else 0f, tween(400), label = "glow")
     val rot = wiggle(editing)
     val renamable = id == "combat" || id == "quantum" || id == "eye"
     val unnamed = (id == "combat" && Names.isDefault(Names.combat, Names.D_COMBAT)) || (id == "quantum" && Names.isDefault(Names.quantum, Names.D_QUANTUM))
-    Box(modifier.graphicsLayer { rotationZ = rot }) {
+    Box(modifier.graphicsLayer { rotationZ = rot }.shadow(glow.dp, shape, clip = false, ambientColor = c, spotColor = c)) {
         Column(
             Modifier.fillMaxWidth()
                 .pressable { if (editing) { if (renamable) onRename?.invoke(id) } else Widgets.tap(ctx, id) }

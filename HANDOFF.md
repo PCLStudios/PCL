@@ -4,6 +4,13 @@ Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Packag
 User's goal: always-listening voice assistant "Chronos Lock" with combat/quantum modes, many voice commands, whisper
 understanding, fuzzy wake word, session-style locking, an online chatbot ("Third Eye"), and a nicer side-panel UI.
 
+## v1.0.0 (release candidate)
+- engage/disengage wording -> activate/deactivate everywhere (voice still accepts both). Always-on default OFF.
+- Mic is suspended during rewarded ads (ChronosEngine.suspendMic). Home card pushes the music-safe mic install.
+- Wake: lone "chronos", more sound-alikes, "<crowns/chronic> lock" pairs; EXTRA_BIASING_STRINGS (API 33+); Commands.correct()
+  repairs near-miss words as a fallback. Ad errors show no codes. Developer options hidden (tap About title 7x).
+- Privacy policy is shown in-app (PrivacyDialog); repo link removed from About. Premium polish: gradients, glow, crossfades.
+
 ## v0.6.0 (launch build)
 - AdMob: Ads.kt (UMP consent, banner on Guide/Style/About only, rewarded ad -> Pass = 24h Power Pass: >8 widgets, >6 steps/program, no banner).
   App ID in manifest; live units hardcoded in AdConfig; About > DEVELOPER OPTIONS toggles TEST/LIVE ads (pref ads_test, default live).

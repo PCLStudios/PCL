@@ -78,7 +78,7 @@ fun StyleScreen() {
         var msg by remember { mutableStateOf("") }
         var ok by remember { mutableStateOf(false) }
         Panel {
-            Text2("Rename anything. Whatever you type is what you say out loud, and she replies with it too. Example: name Combat Mode “Engage Lol”, then say “Engage Lol” and your combat program runs.", C.Soft, 12, mono = false)
+            Text2("Rename anything. Whatever you type is what you say out loud, and she replies with it too. Example: name Combat Mode “Beast Mode”, then say “Beast Mode” and your combat program runs.", C.Soft, 12, mono = false)
             Spacer(Modifier.height(10.dp))
             Text2("COMBAT MODE", C.Dim, 10, spacing = 2)
             Field(c, { c = it; msg = "" }, Names.D_COMBAT, Modifier.fillMaxWidth())
@@ -148,7 +148,7 @@ fun StyleScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 androidx.compose.material3.Text(f.name, color = if (sel) C.Cyan else C.Text, fontFamily = f.family, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                androidx.compose.material3.Text("Chronos Lock engaged", color = C.Soft, fontFamily = f.family, fontSize = 13.sp)
+                androidx.compose.material3.Text("Chronos Lock active", color = C.Soft, fontFamily = f.family, fontSize = 13.sp)
             }
         }
 

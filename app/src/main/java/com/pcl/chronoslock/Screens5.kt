@@ -32,15 +32,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 
-const val REPO_URL = "https://github.com/mindofzexer-lang/pcl-chronos-lock"
-
 internal fun openUrl(ctx: android.content.Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 internal fun sharePcl(ctx: android.content.Context) {
     val text = "I'm using PCL (Project Chronos Lock): a voice assistant that listens for \"Chronos Lock\", runs my own automations, " +
-        "keeps my music playing and has a built-in A.I. chatbot. Free and open source: $REPO_URL"
+        "keeps my music playing and has a built-in A.I. chatbot. Find it on GitHub: $GITHUB_URL"
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
     runCatching { ctx.startActivity(Intent.createChooser(send, "Share PCL").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
@@ -83,9 +81,9 @@ fun GuideScreen() {
 
         Fold("1 · QUICK START", C.Green, startOpen = true) {
             StepLine(1, "Allow the microphone when Android asks.")
-            StepLine(2, "Say “Chronos Lock”. The big button turns green: she is listening for commands.")
+            StepLine(2, "Say “Chronos Lock” (or just “Chronos”). The big button turns green: she is listening for commands.")
             StepLine(3, "Say a command, for example “what time is it”, “set a timer for five minutes” or “combat mode”. No wake word needed while it is green.")
-            StepLine(4, "Say “disengage” (or tap the button) when you are done.")
+            StepLine(4, "Say “deactivate” (or tap the button) when you are done.")
             Spacer(Modifier.height(6.dp))
             Body("Tip: open COMMANDS in the menu to see everything she understands.")
         }
@@ -142,7 +140,7 @@ fun GuideScreen() {
         Fold("5 · KEEP MUSIC PLAYING WHILE SHE LISTENS", C.Green) {
             Body("Android normally pauses your music whenever a voice assistant listens. PCL fixes this with a music-safe microphone that does not touch your music at all.")
             StepLine(1, "Open VOICE in the menu.")
-            StepLine(2, "Under MUSIC-SAFE MIC tap DOWNLOAD (about 40 MB, use Wi-Fi). It installs itself and switches on.")
+            StepLine(2, "Under MUSIC-SAFE MIC (or on the Home card) tap DOWNLOAD (about 40 MB, use Wi-Fi). It installs itself and switches on.")
             StepLine(3, "That's it. Wake word and commands now work while music keeps playing.")
             Spacer(Modifier.height(6.dp))
             Body("Good to know: it works offline. Whisper mode and the chatbot still use Google's recogniser (more accurate), which can pause music for a moment. Use headphones or turn the music down a little so she hears you over it.")
@@ -164,7 +162,7 @@ fun GuideScreen() {
 
         Fold("7 · HOME WIDGETS, NAMES AND THEMES", C.Cyan) {
             Body("Every button on HOME is a widget. Tap EDIT, then ✕ removes it, ‹ › move it, and + ADD brings back more: flashlight, play/pause, volume, timer, battery and others.")
-            Body("In STYLE you can rename Combat Mode, Quantum Focus and the chatbot to anything. Name Combat Mode “Engage Lol” and saying “Engage Lol” runs it, and she answers “Engage Lol activated”. Rename the chatbot “God” and “open god” connects it, and the A.I. introduces itself as God.")
+            Body("In STYLE you can rename Combat Mode, Quantum Focus and the chatbot to anything. Name Combat Mode “Beast Mode” and saying “Beast Mode” runs it, and she answers “Beast Mode activated”. Rename the chatbot “God” and “open god” connects it, and the A.I. introduces itself as God.")
             Body("STYLE also has dark / AMOLED / light, Material You wallpaper colours (Android 12+), accent colours, fonts, glass cards and an animations switch.")
             Row(Modifier.padding(vertical = 6.dp)) { PillButton("OPEN STYLE", C.Cyan) { ChronosEngine.tab.value = Screen.STYLE } }
         }
@@ -180,7 +178,7 @@ fun GuideScreen() {
             Body("PCL is free. If it helps you, the best thing you can do is tell a friend.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {
                 PillButton("SHARE PCL", C.Green, filled = true) { sharePcl(ctx) }
-                PillButton("GITHUB ★", C.Cyan) { openUrl(ctx, REPO_URL) }
+                PillButton("GITHUB ★", C.Cyan) { openUrl(ctx, GITHUB_URL) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {
                 PillButton("BUY ME A COFFEE", C.Amber, filled = true) { openUrl(ctx, COFFEE_URL) }

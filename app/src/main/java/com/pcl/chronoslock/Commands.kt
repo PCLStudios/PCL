@@ -105,7 +105,7 @@ object Commands {
     /** The words after the wake phrase; set by the engine just before a command runs. */
     var body = ""
 
-    private fun on(b: Boolean) = if (b) "engaged" else "offline"
+    private fun on(b: Boolean) = if (b) "active" else "offline"
     private fun battery(ctx: Context): String {
         val bm = ctx.getSystemService(BatteryManager::class.java)
         return "Battery is at ${bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)} percent" + if (bm.isCharging) " and charging" else ""
@@ -157,12 +157,12 @@ object Commands {
     /** Order matters: specific commands first, general ones last. */
     val all: List<Cmd> = listOf(
         // ---- MODES (they answer to whatever names the user chose in STYLE) ----
-        Cmd("MODES", "disengage combat mode", "Turns combat mode off.", { Names.combatOff(it) }) { ChronosEngine.setCombat(false); Names.combatReply(false) },
-        Cmd("MODES", "disengage quantum focus", "Turns quantum focus off.", { Names.quantumOff(it) }) { ChronosEngine.setQuantum(false); Names.quantumReply(false) },
+        Cmd("MODES", "deactivate combat mode", "Turns combat mode off.", { Names.combatOff(it) }) { ChronosEngine.setCombat(false); Names.combatReply(false) },
+        Cmd("MODES", "deactivate quantum focus", "Turns quantum focus off.", { Names.quantumOff(it) }) { ChronosEngine.setQuantum(false); Names.quantumReply(false) },
         Cmd("MODES", "stand down  /  all clear", "Turns off combat mode and quantum focus together.", { it.has("stand down", "all clear", "all modes off") }) { ChronosEngine.setCombat(false); ChronosEngine.setQuantum(false); "All modes have been disengaged" },
-        Cmd("MODES", "red alert", "Instantly engages combat mode.", { it.has("red alert") }) { ChronosEngine.setCombat(true); "Red alert. " + Names.combatReply(true) },
-        Cmd("MODES", "combat mode", "Engages combat mode.", { Names.combat(it) }) { ChronosEngine.setCombat(true); Names.combatReply(true) },
-        Cmd("MODES", "quantum focus", "Approves and activates quantum focus.", { Names.quantum(it) }) { ChronosEngine.setQuantum(true); Names.quantumReply(true) },
+        Cmd("MODES", "red alert", "Instantly activates combat mode.", { it.has("red alert") }) { ChronosEngine.setCombat(true); "Red alert. " + Names.combatReply(true) },
+        Cmd("MODES", "combat mode", "Activates combat mode.", { Names.combat(it) }) { ChronosEngine.setCombat(true); Names.combatReply(true) },
+        Cmd("MODES", "quantum focus", "Activates quantum focus.", { Names.quantum(it) }) { ChronosEngine.setQuantum(true); Names.quantumReply(true) },
         Cmd("MODES", "stop whispering  /  normal mode", "Returns listening to normal.", { (it.has("whisper") && it.off()) || it.has("normal mode", "stop whispering") }) { ChronosEngine.setWhisper(false); "Whisper mode disabled" },
         Cmd("MODES", "whisper mode", "Listens harder for quiet speech (online recognition, waits longer) and answers quietly.", { it.has("whisper") }) { ChronosEngine.setWhisper(true); "Whisper mode enabled. I am listening closely" },
         // ---- THIRD EYE ----
@@ -175,9 +175,9 @@ object Commands {
         // ---- SYSTEM ----
         Cmd("SYSTEM", "flashlight off", "Turns the phone flashlight off.", { it.has("flashlight", "flash light", "torch") && it.off() }) { if (torch(it, false)) "Flashlight off" else "Flashlight unavailable" },
         Cmd("SYSTEM", "flashlight on", "Turns the phone flashlight on.", { it.has("flashlight", "flash light", "torch") }) { if (torch(it, true)) "Flashlight on" else "Flashlight unavailable" },
-        Cmd("SYSTEM", "good night", "Disengages everything and goes to standby.", { it.has("good night", "goodnight") }) { ChronosEngine.allOff(); "Good night. All systems standing by" },
-        Cmd("SYSTEM", "disengage", "Disengages Chronos Lock. Afterwards you must say “Chronos Lock” again.", { it.has("disengage", "deactivate") }) { ChronosEngine.locked.value = false; ChronosEngine.thirdEye.value = false; "Chronos Lock Disengaged" },
-        Cmd("SYSTEM", "engage", "Engages Chronos Lock (same as the big button).", { it.has("engage", "activate") }) { ChronosEngine.locked.value = true; "Chronos Lock Engaged" },
+        Cmd("SYSTEM", "good night", "Deactivates everything and goes to standby.", { it.has("good night", "goodnight") }) { ChronosEngine.allOff(); "Good night. All systems standing by" },
+        Cmd("SYSTEM", "deactivate", "Deactivates Chronos Lock. Afterwards you must say “Chronos Lock” again.", { it.has("disengage", "deactivate") }) { ChronosEngine.locked.value = false; ChronosEngine.thirdEye.value = false; "Chronos Lock Disengaged" },
+        Cmd("SYSTEM", "activate", "Activates Chronos Lock (same as the big button).", { it.has("engage", "activate") }) { ChronosEngine.locked.value = true; "Chronos Lock Engaged" },
         Cmd("SYSTEM", "phone settings", "Opens Android settings (PCL must be on screen).", { it.has("phone settings", "device settings", "android settings") }) { go(it, Intent(Settings.ACTION_SETTINGS), "Opening phone settings") },
         Cmd("SYSTEM", "wifi settings", "Opens the Wi-Fi settings.", { it.has("wifi settings", "wi-fi settings", "wi fi settings") }) { go(it, Intent(Settings.ACTION_WIFI_SETTINGS), "Opening Wi-Fi settings") },
         Cmd("SYSTEM", "bluetooth settings", "Opens the Bluetooth settings.", { it.has("bluetooth") }) { go(it, Intent(Settings.ACTION_BLUETOOTH_SETTINGS), "Opening Bluetooth settings") },
@@ -301,4 +301,23 @@ object Commands {
             openApp(it, body.removePrefix("open").removePrefix("launch").removePrefix("start").trim().removePrefix("the").trim())
         },
     )
+
+    /** Words she knows (command phrases + the user's custom names), used to repair garbled speech. */
+    private fun vocabNow(): Set<String> {
+        val w = HashSet<String>()
+        val src = all.joinToString(" ") { Names.rewrite(it.phrase) } + " " + Names.combat + " " + Names.quantum + " " + Names.eye
+        src.lowercase(Locale.US).split(Regex("[^a-z]+")).filter { it.length >= 5 }.forEach { w.add(it) }
+        return w
+    }
+
+    /** Replaces near-miss words with the closest known word ("combot" becomes "combat"). Null when nothing changed. */
+    fun correct(s: String): String? {
+        val vocab = vocabNow()
+        val out = s.split(" ").joinToString(" ") { t ->
+            if (t.length < 5 || t in vocab || t.any { !it.isLetter() }) t
+            else vocab.filter { kotlin.math.abs(it.length - t.length) <= 1 && Wake.lev(it, t) <= (if (t.length >= 8) 2 else 1) }
+                .minByOrNull { Wake.lev(it, t) } ?: t
+        }
+        return if (out != s) out else null
+    }
 }

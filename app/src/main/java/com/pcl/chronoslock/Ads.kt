@@ -40,7 +40,6 @@ import java.util.Locale
 const val COFFEE_URL = "https://buymeacoffee.com/pclstudios"
 const val GITHUB_URL = "https://github.com/PCLStudios"
 const val TWITTER_URL = "https://x.com/pclglobal"
-const val PRIVACY_URL = "https://github.com/mindofzexer-lang/pcl-chronos-lock/blob/main/PRIVACY.md"
 
 object AdConfig {
     const val BANNER_LIVE = "ca-app-pub-8535931150252475/6883327215"
@@ -85,6 +84,10 @@ object Ads {
     var testMode by mutableStateOf(false)
         private set
 
+    var devUnlocked by mutableStateOf(false)
+        private set
+    fun unlockDev(on: Boolean) { devUnlocked = on; prefs?.edit()?.putBoolean("dev_unlocked", on)?.apply() }
+
     private var rewarded: RewardedAd? = null
     private var loading = false
     private var started = false
@@ -96,6 +99,7 @@ object Ads {
         started = true
         prefs = activity.getSharedPreferences("pcl", Context.MODE_PRIVATE)
         testMode = prefs?.getBoolean("ads_test", false) ?: false
+        devUnlocked = prefs?.getBoolean("dev_unlocked", false) ?: false
         runCatching {
             val info = UserMessagingPlatform.getConsentInformation(activity)
             info.requestConsentInfoUpdate(activity, ConsentRequestParameters.Builder().build(), {
@@ -127,7 +131,7 @@ object Ads {
             override fun onAdLoaded(ad: RewardedAd) { rewarded = ad; loading = false; rewardReady.value = true; message.value = "" }
             override fun onAdFailedToLoad(e: LoadAdError) {
                 rewarded = null; loading = false; rewardReady.value = false
-                message.value = "No ad is available right now (code ${e.code}). Try again in a minute."
+                message.value = "No ad available right now. Try again in a minute."
             }
         })
     }
@@ -135,13 +139,14 @@ object Ads {
     fun showReward(activity: Activity, onEarned: () -> Unit) {
         val ad = rewarded
         if (ad == null) {
-            message.value = if (ready.value) "Getting an ad ready… try again in a few seconds." else "Ads are not ready yet."
+            message.value = if (ready.value) "No ad available yet. Try again in a few seconds." else "Ads are not ready yet."
             loadRewarded(activity); return
         }
+        ChronosEngine.suspendMic(true)            // the mic must not fight the ad for audio
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdDismissedFullScreenContent() { rewarded = null; rewardReady.value = false; loadRewarded(activity) }
+            override fun onAdDismissedFullScreenContent() { rewarded = null; rewardReady.value = false; ChronosEngine.suspendMic(false); loadRewarded(activity) }
             override fun onAdFailedToShowFullScreenContent(e: AdError) {
-                rewarded = null; rewardReady.value = false; message.value = "Couldn't show the ad. Try again."; loadRewarded(activity)
+                rewarded = null; rewardReady.value = false; ChronosEngine.suspendMic(false); message.value = "No ad available right now. Try again in a minute."; loadRewarded(activity)
             }
         }
         ad.show(activity) { onEarned(); message.value = "" }

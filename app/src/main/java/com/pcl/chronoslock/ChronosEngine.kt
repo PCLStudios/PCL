@@ -3,6 +3,7 @@ package com.pcl.chronoslock
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -58,7 +59,7 @@ object ChronosEngine {
     val combat = MutableStateFlow(false)
     val quantum = MutableStateFlow(false)
     val whisper = MutableStateFlow(false)
-    val alwaysOn = MutableStateFlow(true)           // false = the mic only opens while a session is engaged (big button)
+    val alwaysOn = MutableStateFlow(false)          // false = the mic only opens while a session is engaged (big button)
     val keepMusic = MutableStateFlow(true)          // try to resume music the recogniser pauses
     val thirdEye = MutableStateFlow(false)
     val torch = MutableStateFlow(false)
@@ -80,6 +81,7 @@ object ChronosEngine {
     val aiKey = MutableStateFlow("")
     val persona = MutableStateFlow("")             // user's own persona text; blank = automatic (uses the chatbot's name)
     val voskOn = MutableStateFlow(true)            // use the music-safe offline mic when it is installed
+    val hideVoskCard = MutableStateFlow(false)
     val showIntro = MutableStateFlow(false)        // first-launch welcome
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var voskRun: VoskMic.Run? = null
@@ -150,7 +152,8 @@ object ChronosEngine {
         pitch.value = prefs.getFloat("pitch", 1.0f)
         rate.value = prefs.getFloat("rate", 1.0f)
         whisper.value = prefs.getBoolean("whisper", false)
-        alwaysOn.value = prefs.getBoolean("alwaysOn", true)
+        alwaysOn.value = prefs.getBoolean("alwaysOn", false)
+        hideVoskCard.value = prefs.getBoolean("hideVoskCard", false)
         keepMusic.value = prefs.getBoolean("keepMusic", true)
         voskOn.value = prefs.getBoolean("voskOn", true)
         Flows.init(prefs)
@@ -174,7 +177,7 @@ object ChronosEngine {
     /** Settings as JSON text (the API key is left out on purpose so a shared backup never leaks it). */
     fun exportSettings(): String {
         val o = JSONObject()
-        for ((k, v) in prefs.all) { if (k == "aiKey" || k == "intro_done" || k == "pass_until" || k == "ads_test") continue; o.put(k, v) }
+        for ((k, v) in prefs.all) { if (k == "aiKey" || k == "intro_done" || k == "pass_until" || k == "ads_test" || k == "dev_unlocked") continue; o.put(k, v) }
         return o.toString()
     }
 
@@ -184,7 +187,7 @@ object ChronosEngine {
         if (o.length() == 0) return "The backup is empty."
         val ed = prefs.edit()
         for (k in o.keys()) {
-            if (k == "aiKey" || k == "pass_until" || k == "ads_test" || k == "intro_done") continue
+            if (k == "aiKey" || k == "pass_until" || k == "ads_test" || k == "intro_done" || k == "dev_unlocked") continue
             if (k == "pitch" || k == "rate") { ed.putFloat(k, o.optDouble(k, 1.0).toFloat()); continue }
             when (val v = o.get(k)) {
                 is Boolean -> ed.putBoolean(k, v)
@@ -220,14 +223,14 @@ object ChronosEngine {
     // ---- button actions ----
     private fun needLock(): Boolean {
         if (locked.value) return false
-        say("Chronos Lock is not engaged. Say Chronos Lock first"); return true
+        say("Chronos Lock is not active. Say Chronos Lock first"); return true
     }
     fun toggleLock() {
         if (locked.value) {
             locked.value = false; thirdEye.value = false
             main.removeCallbacks(idleRun)
-            say("Chronos Lock Disengaged")
-        } else { locked.value = true; bumpIdle(); say("Chronos Lock Engaged") }
+            say("Chronos Lock deactivated")
+        } else { locked.value = true; bumpIdle(); say("Chronos Lock activated") }
     }
     /** Mode switches run the user's programmed steps (see Flows / PROGRAMS screen). */
     fun setCombat(on: Boolean) {
@@ -242,6 +245,15 @@ object ChronosEngine {
     }
     /** Lets a programmed step speak. */
     fun announce(text: String) { say(text) }
+
+    private var micSuspended = false
+    /** Closes the mic while a full-screen ad plays (and re-opens it after), so ads are never interrupted. */
+    fun suspendMic(on: Boolean) {
+        micSuspended = on
+        if (on) { destroyRecognizer(); main.removeCallbacks(watchdog); main.removeCallbacks(restartRun); phase.value = Phase.STANDBY }
+        else if (running && !speaking && !thinking) restartSoon(400)
+    }
+    fun hideVoskCard() { hideVoskCard.value = true; prefs.edit().putBoolean("hideVoskCard", true).apply() }
 
     fun setAlwaysOn(on: Boolean) {
         alwaysOn.value = on
@@ -522,7 +534,10 @@ object ChronosEngine {
             }
         }
         if (!locked.value) return null                                  // not engaged: ignore everything
-        val pick = alts.firstOrNull { Commands.match(it) != null } ?: return null
+        // exact match first; if the recogniser garbled a word ("combot", "quantam"), try again with the nearest known words
+        val pick = alts.firstOrNull { Commands.match(it) != null }
+            ?: alts.mapNotNull { Commands.correct(it) }.firstOrNull { Commands.match(it) != null }
+            ?: return null
         if (pick.split(" ").size > MAX_WORDS && !Commands.openEnded(pick)) return null
         return Act.Run(Commands.match(pick), pick)
     }
@@ -557,7 +572,7 @@ object ChronosEngine {
             Act.Wake -> {
                 val was = locked.value
                 locked.value = true; bumpIdle()
-                speak(if (was) "Yes? I'm listening" else "Chronos Lock Engaged")
+                speak(if (was) "Yes? I'm listening" else "Chronos Lock activated")
             }
             is Act.Run -> {
                 val was = locked.value
@@ -565,7 +580,7 @@ object ChronosEngine {
                 val cmd = a.cmd
                 if (cmd == null) {
                     bumpIdle()
-                    speak(if (was) "Command not recognized" else "Chronos Lock Engaged. Waiting for your command")
+                    speak(if (was) "Command not recognized" else "Chronos Lock activated. Waiting for your command")
                     return
                 }
                 Commands.body = a.body
@@ -613,15 +628,12 @@ object ChronosEngine {
 
     private fun listen() {
         val c = ctx ?: return
-        if (!running || speaking || thinking) return
+        if (!running || speaking || thinking || micSuspended) return
         if (!alwaysOn.value && !locked.value && !thirdEye.value) {
             // "Always on" is off and no session is engaged: the mic stays closed until the big button is pressed
             destroyRecognizer(); main.removeCallbacks(watchdog); handled = false
             phase.value = Phase.STANDBY
             return
-        }
-        if (!SpeechRecognizer.isRecognitionAvailable(c)) {
-            lastHeard.value = "No speech recogniser. Install Speech Services by Google"; phase.value = Phase.STANDBY; return
         }
         destroyRecognizer()
         handled = false
@@ -643,6 +655,9 @@ object ChronosEngine {
                 })
             return
         }
+        if (!SpeechRecognizer.isRecognitionAvailable(c)) {
+            lastHeard.value = "No speech recogniser. Install Speech Services by Google"; phase.value = Phase.STANDBY; return
+        }
         val eye = thirdEye.value
         val w = whisper.value
         // Online is more accurate (needed for whispers and full sentences); offline is the fallback.
@@ -651,7 +666,9 @@ object ChronosEngine {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)           // alternatives: wake word is matched against all of them
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 8)           // alternatives: wake word is matched against all of them
+            if (Build.VERSION.SDK_INT >= 33) putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS,
+                arrayListOf("Chronos Lock", "Chronos", Names.combat, Names.quantum, Names.eye))   // nudges the recogniser toward our words
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, c.packageName)
             if (!online) putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, if (w) 2200L else if (eye) 1600L else 1100L)
