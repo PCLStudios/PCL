@@ -4,6 +4,10 @@ Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Packag
 User's goal: always-listening voice assistant "Chronos Lock" with combat/quantum modes, many voice commands, whisper
 understanding, fuzzy wake word, session-style locking, an online chatbot ("Third Eye"), and a nicer side-panel UI.
 
+## Release signing (Uptodown / any store)
+- Keystore ~/pcl-release.jks (NEVER commit; user keeps backups). GitHub secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD (also key password), KEY_ALIAS=pcl.
+- Run: gh workflow run release.yml  -> artifact PCL-release/app-release.apk. Every update needs a higher versionCode and the SAME key.
+
 ## v1.0.0 (release candidate)
 - engage/disengage wording -> activate/deactivate everywhere (voice still accepts both). Always-on default OFF.
 - Mic is suspended during rewarded ads (ChronosEngine.suspendMic). Home card pushes the music-safe mic install.
