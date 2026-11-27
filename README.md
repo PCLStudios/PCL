@@ -21,8 +21,6 @@
   <img src="docs/screenshots/framed/05-style.png" width="18%">
 </p>
 
-Original, unedited screenshots are in [`docs/screenshots/original`](docs/screenshots/original).
-
 ## Features
 
 - **Built-in A.I. chatbot.** Talk to any OpenAI-compatible provider (Groq, Gemini, OpenRouter, Pollinations or your own server) with your own API key. Rename it and say its name to open it. A beginner guide in the app walks through setup.
