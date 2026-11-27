@@ -11,17 +11,28 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/framed/01-home.png" width="18%">
+  <img src="docs/screenshots/framed/02-chatbot.png" width="18%">
+  <img src="docs/screenshots/framed/03-automation.png" width="18%">
+  <img src="docs/screenshots/framed/04-notes.png" width="18%">
+  <img src="docs/screenshots/framed/05-style.png" width="18%">
+</p>
+
+Original, unedited screenshots are in [`docs/screenshots/original`](docs/screenshots/original).
+
 ## Features
 
-- **Wake word.** Say “Chronos Lock” (or just “Chronos”). Fuzzy matching copes with mishearing; commands repair near-miss words.
+- **Built-in A.I. chatbot.** Talk to any OpenAI-compatible provider (Groq, Gemini, OpenRouter, Pollinations or your own server) with your own API key. Rename it and say its name to open it. A beginner guide in the app walks through setup.
+- **Task automation (Programs).** Chain steps that run when a mode switches on or off: open apps, play songs, set volume, speak, flash the flashlight, wait, timers, notes, switch other modes, ask the A.I., web search and more. Add IF conditions (battery, charging, night, weekday, online, music playing) and chance. One-tap templates.
 - **80+ voice commands.** Time, timers, alarms, notes, calls, apps, flashlight, volume, media, Wi-Fi/Bluetooth, battery and more.
-- **Music-safe mic.** An optional offline recogniser (Vosk) reads the microphone without taking audio focus, so music and videos keep playing while PCL listens.
-- **Renamable modes and chatbot.** Name Combat Mode, Quantum Focus and the chatbot anything. Say the name and it happens; she answers using it.
-- **Programs.** Automations that run when a mode switches on or off: open apps, play songs, set volume, speak, flash the flashlight, wait, timers, notes, switch other modes, ask the A.I., web search, and more, with IF conditions and chance.
-- **Chatbot.** Any OpenAI-compatible provider (Groq, Gemini, OpenRouter, Pollinations or your own server) using your own API key.
+- **Wake word.** Say “Chronos Lock” (or just “Chronos”). Fuzzy matching copes with mishearing, and commands repair near-miss words.
+- **Music-safe mic.** An optional offline recogniser (Vosk) reads the microphone without taking audio focus, so music and videos keep playing.
+- **Renamable modes.** Name Combat Mode, Quantum Focus and the chatbot anything; say the name and it happens.
 - **Home widgets.** Every Home button is a widget: add, remove and reorder in EDIT mode.
 - **Themes.** Material You, dark / AMOLED / light, accent colours, fonts, optional glass UI, tasteful animations.
-- **In-app guide** with a step-by-step chatbot setup for beginners.
 
 ## Install
 
