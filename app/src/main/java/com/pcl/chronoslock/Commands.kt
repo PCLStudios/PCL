@@ -81,10 +81,11 @@ internal fun media(ctx: Context, key: Int, ok: String): String {
     a.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
     return ok
 }
-internal fun go(ctx: Context, i: Intent, ok: String): String {
-    // Android silently blocks one app opening another from the background, so be honest instead of saying "Opening..."
-    if (!ChronosEngine.appVisible && !Settings.canDrawOverlays(ctx)) return "I can only do that while PCL is open on screen. Open PCL and ask again"
-    return try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok } catch (e: Exception) { "I couldn't open that" }
+internal fun go(ctx: Context, i: Intent, ok: String): String = when (Launcher.launch(ctx, i, ok)) {
+    Launcher.Result.OPENED -> ok
+    // Android blocks background launches; the notification is the one thing it always allows
+    Launcher.Result.NOTIFIED -> "Tap the PCL notification to continue. Allow display over other apps in System to skip this step"
+    Launcher.Result.FAILED -> "I couldn't open that"
 }
 
 internal fun openApp(ctx: Context, name: String): String {
@@ -157,12 +158,12 @@ object Commands {
     /** Order matters: specific commands first, general ones last. */
     val all: List<Cmd> = listOf(
         // ---- MODES (they answer to whatever names the user chose in STYLE) ----
-        Cmd("MODES", "deactivate combat mode", "Turns combat mode off.", { Names.combatOff(it) }) { ChronosEngine.setCombat(false); Names.combatReply(false) },
-        Cmd("MODES", "deactivate quantum focus", "Turns quantum focus off.", { Names.quantumOff(it) }) { ChronosEngine.setQuantum(false); Names.quantumReply(false) },
-        Cmd("MODES", "stand down  /  all clear", "Turns off combat mode and quantum focus together.", { it.has("stand down", "all clear", "all modes off") }) { ChronosEngine.setCombat(false); ChronosEngine.setQuantum(false); "All modes have been disengaged" },
-        Cmd("MODES", "red alert", "Instantly activates combat mode.", { it.has("red alert") }) { ChronosEngine.setCombat(true); "Red alert. " + Names.combatReply(true) },
-        Cmd("MODES", "combat mode", "Activates combat mode.", { Names.combat(it) }) { ChronosEngine.setCombat(true); Names.combatReply(true) },
-        Cmd("MODES", "quantum focus", "Activates quantum focus.", { Names.quantum(it) }) { ChronosEngine.setQuantum(true); Names.quantumReply(true) },
+        Cmd("MODES", "deactivate mode 1", "Turns mode 1 off.", { Names.combatOff(it) }) { ChronosEngine.setCombat(false); Names.combatReply(false) },
+        Cmd("MODES", "deactivate mode 2", "Turns mode 2 off.", { Names.quantumOff(it) }) { ChronosEngine.setQuantum(false); Names.quantumReply(false) },
+        Cmd("MODES", "stand down  /  all clear", "Turns off mode 1 and mode 2 together.", { it.has("stand down", "all clear", "all modes off") }) { ChronosEngine.setCombat(false); ChronosEngine.setQuantum(false); "All modes have been deactivated" },
+        Cmd("MODES", "red alert", "Instantly activates mode 1.", { it.has("red alert") }) { ChronosEngine.setCombat(true); "Red alert. " + Names.combatReply(true) },
+        Cmd("MODES", "mode 1", "Activates mode 1 and runs its program.", { Names.combat(it) }) { ChronosEngine.setCombat(true); Names.combatReply(true) },
+        Cmd("MODES", "mode 2", "Activates mode 2 and runs its program.", { Names.quantum(it) }) { ChronosEngine.setQuantum(true); Names.quantumReply(true) },
         Cmd("MODES", "stop whispering  /  normal mode", "Returns listening to normal.", { (it.has("whisper") && it.off()) || it.has("normal mode", "stop whispering") }) { ChronosEngine.setWhisper(false); "Whisper mode disabled" },
         Cmd("MODES", "whisper mode", "Listens harder for quiet speech (online recognition, waits longer) and answers quietly.", { it.has("whisper") }) { ChronosEngine.setWhisper(true); "Whisper mode enabled. I am listening closely" },
         // ---- THIRD EYE ----
@@ -310,7 +311,7 @@ object Commands {
         return w
     }
 
-    /** Replaces near-miss words with the closest known word ("combot" becomes "combat"). Null when nothing changed. */
+    /** Replaces near-miss words with the closest known word ("mdoe" becomes "mode"). Null when nothing changed. */
     fun correct(s: String): String? {
         val vocab = vocabNow()
         val out = s.split(" ").joinToString(" ") { t ->

@@ -266,7 +266,7 @@ fun SystemScreen() {
         SectionLabel("RESET")
         PillButton("DEACTIVATE EVERYTHING", C.Red, modifier = Modifier.fillMaxWidth()) { ChronosEngine.allOff() }
         Spacer(Modifier.height(16.dp))
-        Text2("PCL v1.0.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("PCL v1.1.0 · ${Commands.all.size} commands", C.Dim, 11)
         Spacer(Modifier.height(24.dp))
     }
 }

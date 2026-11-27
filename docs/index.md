@@ -1,6 +1,6 @@
 # PCL (Project Chronos Lock) Privacy Policy
 
-![PCL](icon.png){: width="96"}
+![PCL: Project Chronos Lock](feature-graphic.png)
 
 Last updated: November 2026. Developer: PCL Studios ([GitHub](https://github.com/PCLStudios), [@pclglobal](https://x.com/pclglobal)).
 

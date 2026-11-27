@@ -225,6 +225,6 @@ private fun SidePanel(current: Screen, onPick: (Screen) -> Unit) {
             Chip(if (locked) "DEACTIVATE" else "ACTIVATE", locked, C.Green) { ChronosEngine.toggleLock() }
         }
         Spacer(Modifier.height(14.dp))
-        Text2("v1.0.0 · ${Commands.all.size} commands", C.Dim, 11)
+        Text2("v1.1.0 · ${Commands.all.size} commands", C.Dim, 11)
     }
 }

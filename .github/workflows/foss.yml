@@ -1,0 +1,25 @@
+name: Build FOSS APK (F-Droid check)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build ad-free release (what F-Droid builds)
+        run: ./gradlew assembleRelease -Pfoss --no-daemon
+      - name: Make sure no Google ads code slipped in
+        run: |
+          if unzip -l app/build/outputs/apk/release/*.apk | grep -qi "gms/ads"; then echo "Google ads found in FOSS build"; exit 1; fi
+          echo "FOSS build is clean"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PCL-foss
+          path: app/build/outputs/apk/release/*.apk

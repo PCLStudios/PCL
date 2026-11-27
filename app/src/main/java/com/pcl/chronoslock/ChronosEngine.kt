@@ -143,7 +143,11 @@ object ChronosEngine {
         // programs that run when these switch on/off
         locked.drop(1).onEach { c -> ctx?.let { Flows.runSlot(it, if (c) "lock_on" else "lock_off") } }.launchIn(scope)
         thirdEye.drop(1).onEach { c -> ctx?.let { Flows.runSlot(it, if (c) "eye_on" else "eye_off") } }.launchIn(scope)
-        whisper.drop(1).onEach { c -> ctx?.let { Flows.runSlot(it, if (c) "whisper_on" else "whisper_off") } }.launchIn(scope)
+        // keep the Android home-screen widgets in step with the app
+        locked.onEach { refreshWidgets() }.launchIn(scope)
+        combat.onEach { refreshWidgets() }.launchIn(scope)
+        quantum.onEach { refreshWidgets() }.launchIn(scope)
+        alwaysOn.onEach { refreshWidgets() }.launchIn(scope)
         tts = TextToSpeech(ctx) { s -> if (s == TextToSpeech.SUCCESS) onTtsReady() }
     }
 
@@ -243,6 +247,8 @@ object ChronosEngine {
         quantum.value = on
         ctx?.let { Flows.runSlot(it, if (on) "quantum_on" else "quantum_off") }
     }
+    fun refreshWidgets() { ctx?.let { runCatching { PclWidgets.updateAll(it) } } }
+
     /** Lets a programmed step speak. */
     fun announce(text: String) { say(text) }
 

@@ -1,1 +1,7 @@
-<resources><string name="app_name">PCL</string></resources>
+<resources>
+    <string name="app_name">PCL</string>
+    <string name="widget_lock_desc">Activate or deactivate Chronos Lock with one tap</string>
+    <string name="widget_always_desc">Turn the always-on microphone on or off</string>
+    <string name="widget_mode1_desc">Switch Mode 1 on or off (runs its program)</string>
+    <string name="widget_mode2_desc">Switch Mode 2 on or off (runs its program)</string>
+</resources>

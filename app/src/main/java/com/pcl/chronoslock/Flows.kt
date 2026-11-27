@@ -32,7 +32,8 @@ data class Step(
 )
 
 /**
- * User-programmable "what happens when X turns on/off". Slots: combat, quantum, lock, eye (chatbot), whisper, each with _on and _off.
+ * User-programmable "what happens when X turns on/off". Slots: mode 1 (combat_*), mode 2 (quantum_*), lock, eye (chatbot), each with _on and _off.
+ * Whisper mode is deliberately NOT here: it is a listening preset, not an automation.
  * Each slot is a list of steps run top to bottom. Stored as JSON in SharedPreferences.
  */
 object Flows {
@@ -52,19 +53,31 @@ object Flows {
     const val SETTINGS = "settings"
     const val ASK = "ask"
     const val SEARCH = "search"
+    const val DIAL = "dial"
+    const val ALARM = "alarm"
+    const val NAVIGATE = "navigate"
+    const val NOTIFY = "notify"
+    const val COPY = "copy"
+    const val CAMERA = "camera"
+    const val RINGER = "ringer"
+    const val STOP = "stop"
 
     val TYPES = listOf(
         OPEN_APP to "OPEN APP", PLAY to "PLAY SONG", URL to "OPEN LINK", KEY to "MEDIA KEY", VOLUME to "VOLUME", SAY to "SAY",
         TORCH to "FLASHLIGHT", WAIT to "WAIT", TIMER to "START TIMER", NOTE to "SAVE NOTE", MODE to "SWITCH MODE", ASK to "ASK A.I.",
-        SEARCH to "WEB SEARCH", SETTINGS to "OPEN SETTINGS", SCREEN to "GO TO SCREEN", VIBRATE to "VIBRATE"
+        SEARCH to "WEB SEARCH", SETTINGS to "OPEN SETTINGS", SCREEN to "GO TO SCREEN", VIBRATE to "VIBRATE",
+        NAVIGATE to "NAVIGATE", DIAL to "DIAL NUMBER", ALARM to "SET ALARM", NOTIFY to "NOTIFICATION", COPY to "COPY TEXT",
+        CAMERA to "OPEN CAMERA", RINGER to "RINGER MODE", STOP to "STOP HERE"
     )
 
     /** One-tap values for steps whose argument is a fixed choice. */
     val CHOICES: Map<String, List<String>> = mapOf(
         KEY to listOf("play", "pause", "playpause", "next", "previous"),
         TORCH to listOf("on", "off", "blink"),
-        MODE to listOf("combat on", "combat off", "quantum on", "quantum off", "whisper on", "whisper off", "lock on", "lock off", "chatbot on", "chatbot off"),
-        SETTINGS to listOf("wifi", "bluetooth", "display", "sound", "battery saver", "apps", "all settings"),
+        MODE to listOf("mode 1 on", "mode 1 off", "mode 2 on", "mode 2 off", "lock on", "lock off", "chatbot on", "chatbot off"),
+        RINGER to listOf("normal", "vibrate"),
+        CAMERA to listOf("photo", "video"),
+        SETTINGS to listOf("wifi", "internet panel", "bluetooth", "display", "sound", "volume panel", "battery saver", "apps", "all settings"),
         SCREEN to listOf("home", "notes", "programs", "voice", "system", "style", "guide", "commands", "chatbot"),
         VOLUME to listOf("0", "25", "50", "75", "100")
     )
@@ -76,7 +89,7 @@ object Flows {
     )
     fun condNeedsNumber(c: String) = c == "batlow" || c == "bathigh" || c == "after" || c == "before"
 
-    val SLOTS = listOf("combat_on", "combat_off", "quantum_on", "quantum_off", "lock_on", "lock_off", "eye_on", "eye_off", "whisper_on", "whisper_off")
+    val SLOTS = listOf("combat_on", "combat_off", "quantum_on", "quantum_off", "lock_on", "lock_off", "eye_on", "eye_off")
 
     val TEMPLATES: List<Pair<String, List<Step>>> = listOf(
         "FOCUS" to listOf(
@@ -156,12 +169,15 @@ object Flows {
     fun runSlot(ctx: Context, slot: String) { if (slot !in disabled.value) run(ctx, get(slot)) }
 
     /** Runs the steps in order, honouring each step's wait. Conditions are checked when the step's turn comes. Never throws. */
+    private class RunState { @Volatile var stopped = false }
+
     fun run(ctx: Context, steps: List<Step>) {
+        val rs = RunState()
         var t = 0L
         for (s in steps) {
             t += s.delay.coerceIn(0, 600) * 1000L
             if (s.type == WAIT) { t += (s.arg.filter { it.isDigit() }.toIntOrNull() ?: 1).coerceIn(0, 600) * 1000L; continue }
-            main.postDelayed({ runCatching { if (passes(ctx, s)) exec(ctx, s) } }, t)
+            main.postDelayed({ runCatching { if (!rs.stopped && passes(ctx, s)) { if (s.type == STOP) { rs.stopped = true } else { exec(ctx, s) } } } }, t)
         }
     }
 
@@ -281,6 +297,8 @@ object Flows {
                 val a = s.arg.lowercase(Locale.US)
                 val action = when {
                     a.contains("wifi") || a.contains("wi-fi") -> Settings.ACTION_WIFI_SETTINGS
+                    a.contains("internet") -> "android.settings.panel.action.INTERNET_CONNECTIVITY"
+                    a.contains("volume panel") -> "android.settings.panel.action.VOLUME"
                     a.contains("bluetooth") -> Settings.ACTION_BLUETOOTH_SETTINGS
                     a.contains("display") || a.contains("bright") -> Settings.ACTION_DISPLAY_SETTINGS
                     a.contains("sound") || a.contains("volume") -> Settings.ACTION_SOUND_SETTINGS
@@ -291,16 +309,42 @@ object Flows {
                 go(ctx, Intent(action), "")
             }
             ASK -> if (s.arg.isNotBlank()) ChronosEngine.ask(expand(ctx, pick(s.arg)))
+            NAVIGATE -> pick(s.arg).let { if (it.isNotBlank()) go(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(it))), "") }
+            DIAL -> s.arg.trim().let { if (it.isNotBlank()) go(ctx, Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(it))), "") }
+            ALARM -> {
+                // "7:30" or "7 30" or "19:05"
+                val n = s.arg.split(Regex("[^0-9]+")).filter { it.isNotBlank() }.mapNotNull { it.toIntOrNull() }
+                if (n.isNotEmpty()) go(ctx, Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
+                    .putExtra(android.provider.AlarmClock.EXTRA_HOUR, n[0].coerceIn(0, 23))
+                    .putExtra(android.provider.AlarmClock.EXTRA_MINUTES, (n.getOrNull(1) ?: 0).coerceIn(0, 59))
+                    .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, s.app.ifBlank { "PCL" })
+                    .putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true), "")
+            }
+            NOTIFY -> postNote(ctx, s.app.ifBlank { "PCL" }, expand(ctx, pick(s.arg)))
+            COPY -> if (s.arg.isNotBlank()) {
+                ctx.getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("PCL", expand(ctx, pick(s.arg))))
+            }
+            CAMERA -> go(ctx, Intent(if (s.arg.trim().lowercase(Locale.US).startsWith("video")) MediaStore.ACTION_VIDEO_CAPTURE else MediaStore.ACTION_IMAGE_CAPTURE), "")
+            RINGER -> ctx.getSystemService(android.media.AudioManager::class.java).ringerMode =
+                if (s.arg.trim().lowercase(Locale.US).startsWith("vib")) android.media.AudioManager.RINGER_MODE_VIBRATE else android.media.AudioManager.RINGER_MODE_NORMAL
             SEARCH -> pick(s.arg).let { if (it.isNotBlank()) go(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(expand(ctx, it)))), "") }
         }
+    }
+
+    private fun postNote(ctx: Context, title: String, text: String) {
+        val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+        nm.createNotificationChannel(android.app.NotificationChannel("pcl_actions", "PCL actions", android.app.NotificationManager.IMPORTANCE_HIGH))
+        val n = android.app.Notification.Builder(ctx, "pcl_actions").setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle(title).setContentText(text).setStyle(android.app.Notification.BigTextStyle().bigText(text)).setAutoCancel(true).build()
+        nm.notify((System.currentTimeMillis() % 100000).toInt() + 6000, n)
     }
 
     private fun switchMode(a: String) {
         val on = !(a.contains("off") || a.contains("disengage") || a.contains("deactivate") || a.contains("stop"))
         when {
-            a.contains("combat") -> ChronosEngine.setCombat(on)
-            a.contains("quantum") -> ChronosEngine.setQuantum(on)
-            a.contains("whisper") -> ChronosEngine.setWhisper(on)
+            a.contains("mode 1") || a.contains("combat") -> ChronosEngine.setCombat(on)
+            a.contains("mode 2") || a.contains("quantum") -> ChronosEngine.setQuantum(on)
             a.contains("lock") -> { ChronosEngine.locked.value = on; if (!on) ChronosEngine.thirdEye.value = false }
             a.contains("chat") || a.contains("eye") -> { if (on) ChronosEngine.openEye() else ChronosEngine.closeEye() }
         }

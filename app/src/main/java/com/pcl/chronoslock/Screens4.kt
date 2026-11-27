@@ -38,7 +38,7 @@ fun RenameDialog(which: String, onDismiss: () -> Unit) {
     val current = when (which) { "combat" -> Names.combat; "quantum" -> Names.quantum; else -> Names.eye }
     var text by remember { mutableStateOf(current) }
     var err by remember { mutableStateOf("") }
-    val title = when (which) { "combat" -> "RENAME COMBAT MODE"; "quantum" -> "RENAME QUANTUM FOCUS"; else -> "RENAME THE CHATBOT" }
+    val title = when (which) { "combat" -> "RENAME MODE 1"; "quantum" -> "RENAME MODE 2"; else -> "RENAME THE CHATBOT" }
     Dialog(onDismissRequest = onDismiss) {
         Panel(accent = C.Cyan) {
             Text2(title, C.Cyan, 13, bold = true, spacing = 2)
@@ -78,12 +78,12 @@ fun StyleScreen() {
         var msg by remember { mutableStateOf("") }
         var ok by remember { mutableStateOf(false) }
         Panel {
-            Text2("Rename anything. Whatever you type is what you say out loud, and she replies with it too. Example: name Combat Mode “Beast Mode”, then say “Beast Mode” and your combat program runs.", C.Soft, 12, mono = false)
+            Text2("Rename anything. Whatever you type is what you say out loud, and she replies with it too. Example: name Mode 1 “Beast Mode”, then say “Beast Mode” and your combat program runs.", C.Soft, 12, mono = false)
             Spacer(Modifier.height(10.dp))
-            Text2("COMBAT MODE", C.Dim, 10, spacing = 2)
+            Text2("MODE 1", C.Dim, 10, spacing = 2)
             Field(c, { c = it; msg = "" }, Names.D_COMBAT, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
-            Text2("QUANTUM FOCUS", C.Dim, 10, spacing = 2)
+            Text2("MODE 2", C.Dim, 10, spacing = 2)
             Field(q, { q = it; msg = "" }, Names.D_QUANTUM, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Text2("CHATBOT (default “Chatbot”, “third eye” always works too)", C.Dim, 10, spacing = 2)

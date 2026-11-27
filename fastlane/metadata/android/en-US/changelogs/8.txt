@@ -1,0 +1,7 @@
+First public release.
+
+- Wake word "Chronos Lock" or "Chronos", 80+ voice commands
+- Built-in A.I. chatbot (bring your own key)
+- Programs: task automation with conditions
+- Optional offline music-safe microphone
+- Material You themes, fonts and Home widgets

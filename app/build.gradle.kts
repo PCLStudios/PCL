@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// -Pfoss  =  F-Droid build: no Google ads libraries, no ads, no limits.  Default = normal build with AdMob.
+val foss = project.hasProperty("foss")
+
 android {
     namespace = "com.pcl.chronoslock"
     compileSdk = 34
@@ -12,8 +15,8 @@ android {
         applicationId = "com.pcl.chronoslock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.0.0"
+        versionCode = 9
+        versionName = "1.1.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
@@ -27,6 +30,12 @@ android {
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEYSTORE_PASSWORD")
             }
+        }
+    }
+    sourceSets {
+        getByName("main") {
+            java.srcDir(if (foss) "src/foss/java" else "src/full/java")
+            manifest.srcFile(if (foss) "src/main/AndroidManifest.xml" else "src/full/AndroidManifest.xml")
         }
     }
     buildTypes {
@@ -52,10 +61,12 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.compose.animation:animation")
     // Ads (AdMob) + the EU/UK consent form
-    implementation("com.google.android.gms:play-services-ads:23.6.0")
-    implementation("com.google.android.ump:user-messaging-platform:3.0.0")
+
     implementation("androidx.core:core-ktx:1.13.1")
     // Offline speech recogniser: reads the mic directly (no audio focus), so music keeps playing
     implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("com.alphacephei:vosk-android:0.3.47") { exclude(group = "net.java.dev.jna", module = "jna") }
 }
+
+// Ads libraries live in their own script so the F-Droid build never even reads them.
+if (!foss) apply(from = "ads.gradle.kts")

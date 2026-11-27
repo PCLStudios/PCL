@@ -2,7 +2,6 @@ package com.pcl.chronoslock
 
 import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -37,9 +36,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-const val COFFEE_URL = "https://buymeacoffee.com/pclstudios"
-const val GITHUB_URL = "https://github.com/PCLStudios"
-const val TWITTER_URL = "https://x.com/pclglobal"
 
 object AdConfig {
     const val BANNER_LIVE = "ca-app-pub-8535931150252475/6883327215"
@@ -49,12 +45,6 @@ object AdConfig {
     const val REWARDED_TEST = "ca-app-pub-3940256099942544/5224354917"
     fun banner(test: Boolean) = if (test) BANNER_TEST else BANNER_LIVE
     fun rewarded(test: Boolean) = if (test) REWARDED_TEST else REWARDED_LIVE
-}
-
-fun Context.findActivity(): Activity? {
-    var c: Context = this
-    while (c is ContextWrapper) { if (c is Activity) return c; c = c.baseContext }
-    return null
 }
 
 /** Power Pass: 24 hours of unlimited widgets and program steps, and no banner ads. Earned by watching one rewarded ad. */
@@ -77,6 +67,8 @@ object Pass {
 
 /** AdMob: consent form first (required in the EU/UK), then banner + rewarded ads. Never touches the microphone side of the app. */
 object Ads {
+    /** true in the normal build; the F-Droid (foss) build has no ads and no limits. */
+    const val enabled = true
     val ready = MutableStateFlow(false)
     val rewardReady = MutableStateFlow(false)
     val message = MutableStateFlow("")

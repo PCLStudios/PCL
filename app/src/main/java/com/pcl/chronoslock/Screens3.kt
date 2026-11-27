@@ -37,17 +37,29 @@ fun FlowsScreen() {
         Panel {
             Text2("WHAT YOU CAN DO", C.Cyan, 11, bold = true, spacing = 2)
             Spacer(Modifier.height(4.dp))
-            Text2("Open apps, play songs, open links, press media keys, set volume, speak, flash the flashlight, wait, start timers, save notes, switch other modes, ask the A.I., search the web, open settings, jump to a PCL screen, vibrate.", C.Soft, 12, mono = false)
+            Text2("Open apps, play songs, open links, press media keys, set volume, speak, flash the flashlight, wait, timers, notes, switch other modes, ask the A.I., search the web, navigate, dial, set an alarm, post a notification, copy text, open the camera, set the ringer, open settings, vibrate, or stop the rest of the program when a condition is met.", C.Soft, 12, mono = false)
             Spacer(Modifier.height(6.dp))
             Text2("Every step can have a wait, an IF (battery, charging, night, weekday, online, music playing…) and a chance. Start from a template with one tap.", C.Soft, 12, mono = false)
             Spacer(Modifier.height(6.dp))
             Text2("Tip: PLAY SONG uses Android's “play from search”, which Spotify and YouTube Music understand. If your player ignores it, use OPEN APP then MEDIA KEY play. Several lines in a box = she picks one at random.", C.Dim, 11, mono = false)
         }
+        if (!Launcher.canOpenInBackground(LocalContext.current)) {
+            val ctx = LocalContext.current
+            Spacer(Modifier.height(10.dp))
+            Panel(accent = C.Amber) {
+                Text2("TO RUN PROGRAMS WHILE OTHER APPS ARE OPEN", C.Amber, 11, bold = true, spacing = 1)
+                Spacer(Modifier.height(4.dp))
+                Text2("Android blocks apps from opening other apps in the background. Allow “Display over other apps” once and your programs can open Spotify and others even when PCL isn't on screen. Without it, PCL posts a notification you tap instead.", C.Soft, 12, mono = false)
+                Spacer(Modifier.height(8.dp))
+                PillButton("ALLOW DISPLAY OVER OTHER APPS", C.Amber, filled = true, modifier = Modifier.fillMaxWidth()) {
+                    runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
+            }
+        }
         FlowBlock(Names.combat.uppercase(Locale.US), C.Red, "combat", "TURNED ON", "TURNED OFF")
         FlowBlock(Names.quantum.uppercase(Locale.US), C.Violet, "quantum", "TURNED ON", "TURNED OFF")
         FlowBlock("CHRONOS LOCK", C.Green, "lock", "ACTIVATED", "DEACTIVATED")
         FlowBlock(Names.eye.uppercase(Locale.US), C.Cyan, "eye", "OPENED", "CLOSED")
-        FlowBlock("WHISPER MODE", C.Amber, "whisper", "TURNED ON", "TURNED OFF")
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -111,7 +123,15 @@ private fun hintFor(type: String) = when (type) {
     Flows.WAIT -> "seconds to wait"
     Flows.TIMER -> "minutes, e.g. 25"
     Flows.NOTE -> "note text. {time} {date} {battery} work"
-    Flows.MODE -> "e.g. combat on, whisper off, lock on"
+    Flows.MODE -> "e.g. mode 1 on, mode 2 off, lock on"
+    Flows.NAVIGATE -> "address or place to navigate to"
+    Flows.DIAL -> "phone number (opens the dialer)"
+    Flows.ALARM -> "time like 7:30 or 19:05. Label below is optional"
+    Flows.NOTIFY -> "text of the notification. {time} {date} {battery} work"
+    Flows.COPY -> "text to copy to the clipboard"
+    Flows.CAMERA -> "photo or video"
+    Flows.RINGER -> "normal or vibrate"
+    Flows.STOP -> "nothing to type. Add an IF below: if it is true, the steps after this one are skipped"
     Flows.SCREEN -> "home, notes, programs, voice, system, style, guide"
     Flows.VIBRATE -> "milliseconds, e.g. 400"
     Flows.SETTINGS -> "wifi, bluetooth, display, sound, battery saver, apps"
@@ -158,6 +178,10 @@ private fun StepEditor(slot: String, n: Int, total: Int, s: Step, accent: Color)
     if (s.type == Flows.TIMER) {
         Spacer(Modifier.height(6.dp))
         Field(app, { app = it; push() }, "what she says when it ends (optional)", Modifier.fillMaxWidth())
+    }
+    if (s.type == Flows.ALARM || s.type == Flows.NOTIFY) {
+        Spacer(Modifier.height(6.dp))
+        Field(app, { app = it; push() }, if (s.type == Flows.ALARM) "alarm label (optional)" else "notification title (optional)", Modifier.fillMaxWidth())
     }
     Spacer(Modifier.height(6.dp))
     Field(delay, { delay = it.filter { c -> c.isDigit() }.take(3); push() }, "wait before this step, seconds (optional)", Modifier.fillMaxWidth())

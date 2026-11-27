@@ -69,7 +69,7 @@ fun AboutScreen() {
         ScreenTitle("ABOUT", "Made by PCL Studios.")
         Panel(accent = C.Cyan) {
             // tap the title a few times, like Android's build number, to reveal developer options
-            Text2("PROJECT CHRONOS LOCK", C.Cyan, 16, bold = true, spacing = 3, modifier = Modifier.clickable {
+            Text2("PROJECT CHRONOS LOCK", C.Cyan, 16, bold = true, spacing = 3, modifier = Modifier.clickable(enabled = Ads.enabled) {
                 if (Ads.devUnlocked) hint = "Developer options are already on."
                 else {
                     taps++
@@ -79,7 +79,7 @@ fun AboutScreen() {
                 }
             })
             Spacer(Modifier.height(4.dp))
-            Text2("v1.0.0 · ${Commands.all.size} commands", C.Dim, 11)
+            Text2("v1.1.0 · ${Commands.all.size} commands", C.Dim, 11)
             if (hint.isNotBlank()) { Spacer(Modifier.height(4.dp)); Text2(hint, C.Amber, 11, mono = false) }
             Spacer(Modifier.height(8.dp))
             Text2("A voice-first assistant for your phone: say “Chronos Lock”, run commands and automations, keep your music playing and talk to an A.I. chatbot you can rename. No account, no sign-up, open source.", C.Soft, 13, mono = false)
@@ -103,6 +103,7 @@ fun AboutScreen() {
             Text2("Always compare the first and last characters of the address after pasting. Crypto sent to the wrong network can't be recovered.", C.Dim, 11, mono = false)
         }
 
+        if (Ads.enabled) {
         SectionLabel("POWER PASS")
         if (Pass.active) {
             Panel(accent = C.Green) {
@@ -113,6 +114,7 @@ fun AboutScreen() {
             Spacer(Modifier.height(8.dp))
         }
         PassNudge("Free PCL: ${Pass.FREE_WIDGETS} widgets and ${Pass.FREE_STEPS} steps per program, plus a small banner on this page, Guide and Style. Watch one short ad for 24 hours of unlimited widgets, unlimited steps and no banners. Themes, voices, the chatbot and every command always stay free.") {}
+        }
 
         SectionLabel("LEGAL")
         Panel {

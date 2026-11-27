@@ -85,8 +85,8 @@ object HomeLayout {
 object Widgets {
     val ALL = listOf(
         WDef("lock", "◎", { "CHRONOS LOCK" }, "Activate or deactivate Chronos Lock with one tap, like the big button."),
-        WDef("combat", "◆", { if (Names.isDefault(Names.combat, Names.D_COMBAT)) "MODE 1" else Names.combat.uppercase(Locale.US) }, "Turns your combat mode on or off (runs its PROGRAM)."),
-        WDef("quantum", "★", { if (Names.isDefault(Names.quantum, Names.D_QUANTUM)) "MODE 2" else Names.quantum.uppercase(Locale.US) }, "Turns your focus mode on or off (runs its PROGRAM)."),
+        WDef("combat", "◆", { Names.combat.uppercase(Locale.US) }, "Turns mode 1 on or off and runs its PROGRAM."),
+        WDef("quantum", "★", { Names.quantum.uppercase(Locale.US) }, "Turns mode 2 on or off and runs its PROGRAM."),
         WDef("whisper", "◌", { "WHISPER" }, "Listen harder for quiet speech."),
         WDef("eye", "◉", { Names.eye.uppercase(Locale.US) }, "Open or close the online chatbot."),
         WDef("torch", "☼", { "FLASHLIGHT" }, "Phone flashlight."),

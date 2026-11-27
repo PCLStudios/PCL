@@ -1,0 +1,5 @@
+Modes now default to Mode 1 and Mode 2 and answer to "mode one".
+New: Android home-screen widgets (Chronos Lock, Always On, Mode 1, Mode 2).
+Fixed: programs now open apps like Spotify even when PCL is in the background.
+New program steps: navigate, dial, alarm, notification, copy text, camera, ringer, stop here.
+Whisper mode is no longer a program trigger.

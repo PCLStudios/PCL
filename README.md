@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/icon.png" width="120" alt="PCL icon"></p>
+<p align="center"><img src="docs/feature-graphic.png" alt="PCL: Project Chronos Lock. A.I. Chatbot, Task Automation, Voice Control"></p>
 
 <h1 align="center">PCL · Project Chronos Lock</h1>
 <p align="center"><b>A voice-first assistant for Android.</b> Say “Chronos Lock”, run commands and automations, keep your music playing, and talk to an A.I. chatbot you can rename.</p>
@@ -21,6 +21,8 @@
   <img src="docs/screenshots/framed/05-style.png" width="18%">
 </p>
 
+Original, unedited screenshots are in [`docs/screenshots/original`](docs/screenshots/original).
+
 ## Features
 
 - **Built-in A.I. chatbot.** Talk to any OpenAI-compatible provider (Groq, Gemini, OpenRouter, Pollinations or your own server) with your own API key. Rename it and say its name to open it. A beginner guide in the app walks through setup.
@@ -29,6 +31,7 @@
 - **Wake word.** Say “Chronos Lock” (or just “Chronos”). Fuzzy matching copes with mishearing, and commands repair near-miss words.
 - **Music-safe mic.** An optional offline recogniser (Vosk) reads the microphone without taking audio focus, so music and videos keep playing.
 - **Renamable modes.** Name Combat Mode, Quantum Focus and the chatbot anything; say the name and it happens.
+- **Android home-screen widgets.** Chronos Lock, Always On, Mode 1 and Mode 2 buttons you can place on your launcher.
 - **Home widgets.** Every Home button is a widget: add, remove and reorder in EDIT mode.
 - **Themes.** Material You, dark / AMOLED / light, accent colours, fonts, optional glass UI, tasteful animations.
 
@@ -37,6 +40,16 @@
 Download the latest signed APK from [Releases](../../releases) or from Uptodown. Updates install over the previous version because every release is signed with the same key.
 
 Requirements: Android 8.0 (API 26) or newer, microphone permission, and Speech Services by Google for the standard recogniser.
+
+## F-Droid / ad-free build
+
+Build with `-Pfoss` for the free-software variant: no Google libraries, no ads and no Power Pass limits.
+
+```
+./gradlew assembleRelease -Pfoss
+```
+
+Fastlane store metadata lives in `fastlane/metadata/android/en-US`. A draft F-Droid build recipe is in `metadata-fdroid/`.
 
 ## Build from source
 

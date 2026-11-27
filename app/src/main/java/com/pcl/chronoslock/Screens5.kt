@@ -82,7 +82,7 @@ fun GuideScreen() {
         Fold("1 · QUICK START", C.Green, startOpen = true) {
             StepLine(1, "Allow the microphone when Android asks.")
             StepLine(2, "Say “Chronos Lock” (or just “Chronos”). The big button turns green: she is listening for commands.")
-            StepLine(3, "Say a command, for example “what time is it”, “set a timer for five minutes” or “combat mode”. No wake word needed while it is green.")
+            StepLine(3, "Say a command, for example “what time is it”, “set a timer for five minutes” or “mode 1”. No wake word needed while it is green.")
             StepLine(4, "Say “deactivate” (or tap the button) when you are done.")
             Spacer(Modifier.height(6.dp))
             Body("Tip: open COMMANDS in the menu to see everything she understands.")
@@ -148,8 +148,8 @@ fun GuideScreen() {
         }
 
         Fold("6 · PROGRAMS: MAKE MODES DO THINGS", C.Amber) {
-            Body("A PROGRAM is a list of steps that runs when something switches on or off: combat mode, quantum focus, Chronos Lock, the chatbot or whisper mode.")
-            StepLine(1, "Open PROGRAMS and pick what to program, e.g. combat mode, WHEN TURNED ON.")
+            Body("A PROGRAM is a list of steps that runs when something switches on or off: mode 1, mode 2, Chronos Lock or the chatbot. (Whisper mode is just a listening preset, not a program.)")
+            StepLine(1, "Open PROGRAMS and pick what to program, e.g. mode 1, WHEN TURNED ON.")
             StepLine(2, "Tap a step type to add it: open an app, play a song, set the volume, say something, start a timer, flash the flashlight and more.")
             StepLine(3, "Optional: set a wait in seconds before a step, so music starts after the app opens.")
             StepLine(4, "Optional: add an IF, like “only at night” or “only if battery is below 20”. The step is skipped when the condition is false.")
@@ -162,7 +162,8 @@ fun GuideScreen() {
 
         Fold("7 · HOME WIDGETS, NAMES AND THEMES", C.Cyan) {
             Body("Every button on HOME is a widget. Tap EDIT, then ✕ removes it, ‹ › move it, and + ADD brings back more: flashlight, play/pause, volume, timer, battery and others.")
-            Body("In STYLE you can rename Combat Mode, Quantum Focus and the chatbot to anything. Name Combat Mode “Beast Mode” and saying “Beast Mode” runs it, and she answers “Beast Mode activated”. Rename the chatbot “God” and “open god” connects it, and the A.I. introduces itself as God.")
+            Body("In STYLE you can rename Mode 1, Mode 2 and the chatbot to anything. Name Mode 1 “Beast Mode” and saying “Beast Mode” runs it, and she answers “Beast Mode activated”. Rename the chatbot “God” and “open god” connects it, and the A.I. introduces itself as God.")
+            Body("Android home screen widgets: long-press your phone's home screen, choose Widgets, find PCL, and add Chronos Lock, Always On, Mode 1 or Mode 2 buttons.")
             Body("STYLE also has dark / AMOLED / light, Material You wallpaper colours (Android 12+), accent colours, fonts, glass cards and an animations switch.")
             Row(Modifier.padding(vertical = 6.dp)) { PillButton("OPEN STYLE", C.Cyan) { ChronosEngine.tab.value = Screen.STYLE } }
         }

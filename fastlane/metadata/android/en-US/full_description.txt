@@ -1,0 +1,21 @@
+Say "Chronos Lock" and your phone listens. Talk to an A.I., automate your day and control your phone hands-free.
+
+<b>Talk to a built-in A.I. chatbot</b>
+Ask anything out loud and hear the answer spoken back. Connect any OpenAI-compatible chatbot (Groq, Google Gemini, OpenRouter and more) with your own free key. A step-by-step beginner guide inside the app sets it up in minutes. Rename the chatbot to anything you like and just say its name to open it.
+
+<b>Automate anything with Programs</b>
+Build task automations that run when a mode switches on or off. Chain steps like open an app, play a song, set the volume, speak, start a timer, save a note, flash the flashlight, ask the A.I., search the web and more. Make them smart with IF conditions (only at night, only if battery is low, only when charging, only on weekdays), random chances, waits, and one-tap templates.
+
+<b>80+ voice commands</b>
+Time and date, timers and alarms, notes, calls, apps, flashlight, volume, media control, Wi-Fi and Bluetooth, battery and more. Works with just "Chronos" too, and copes with garbled speech.
+
+<b>Your music keeps playing</b>
+An optional offline microphone (Vosk) listens without pausing your songs, podcasts or videos.
+
+<b>Make it yours</b>
+Name your modes anything and say the name to run them. Material You colours, dark, AMOLED and light themes, fonts, an optional glass look, and Home widgets you can add, remove and rearrange.
+
+<b>Private by design</b>
+No account. No PCL server. No ads and no tracking in this build. Your settings, notes and API key stay on your phone.
+
+Needs microphone permission. Speech Services by Google is recommended; the optional offline model is downloaded from alphacephei.com.

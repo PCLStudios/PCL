@@ -4,6 +4,11 @@ Project: Android app (Kotlin, Jetpack Compose, minSdk 26, compileSdk 34). Packag
 User's goal: always-listening voice assistant "Chronos Lock" with combat/quantum modes, many voice commands, whisper
 understanding, fuzzy wake word, session-style locking, an online chatbot ("Third Eye"), and a nicer side-panel UI.
 
+## F-Droid / foss build
+- `-Pfoss` selects src/foss (ad-free stubs of Ads.kt/Pass), the clean main manifest, and skips app/ads.gradle.kts. Default build uses src/full + src/full/AndroidManifest.xml (AdMob).
+- gradlew + wrapper jar (8.7) committed for F-Droid. fastlane metadata in fastlane/metadata/android/en-US; draft recipe metadata-fdroid/com.pcl.chronoslock.yml.
+- Tag every release vX.Y.Z; changelog file named by versionCode (changelogs/8.txt).
+
 ## Release signing (Uptodown / any store)
 - Keystore ~/pcl-release.jks (NEVER commit; user keeps backups). GitHub secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD (also key password), KEY_ALIAS=pcl.
 - Run: gh workflow run release.yml  -> artifact PCL-release/app-release.apk. Every update needs a higher versionCode and the SAME key.

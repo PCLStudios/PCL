@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <queries>
@@ -31,10 +32,6 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.PCL">
 
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-8535931150252475~3626608488" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -51,5 +48,23 @@
             android:name=".ChronosService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <receiver android:name=".LockWidget" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_lock_info" />
+        </receiver>
+        <receiver android:name=".AlwaysWidget" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_always_info" />
+        </receiver>
+        <receiver android:name=".Mode1Widget" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_mode1_info" />
+        </receiver>
+        <receiver android:name=".Mode2Widget" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_mode2_info" />
+        </receiver>
+        <receiver android:name=".WidgetActionReceiver" android:exported="false" />
     </application>
 </manifest>

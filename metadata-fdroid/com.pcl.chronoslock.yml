@@ -1,0 +1,36 @@
+Categories:
+  - System
+License: MIT
+AuthorName: PCL Studios
+WebSite: https://github.com/PCLStudios/PCL
+SourceCode: https://github.com/PCLStudios/PCL
+IssueTracker: https://github.com/PCLStudios/PCL/issues
+Changelog: https://github.com/PCLStudios/PCL/blob/HEAD/CHANGELOG.md
+Donate: https://buymeacoffee.com/pclstudios
+
+AntiFeatures:
+  NonFreeNet:
+    en-US: The chatbot talks to third-party A.I. services you choose, and speech recognition can use Google's service.
+
+AutoName: PCL
+
+RepoType: git
+Repo: https://github.com/PCLStudios/PCL.git
+
+Builds:
+  - versionName: 1.1.0
+    versionCode: 9
+    commit: v1.1.0
+    subdir: app
+    gradle:
+      - yes
+    gradleprops:
+      - foss
+    scandelete:
+      - app/ads.gradle.kts
+      - app/src/full
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.1.0
+CurrentVersionCode: 9
