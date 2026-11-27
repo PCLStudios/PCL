@@ -21,7 +21,6 @@
   <img src="docs/screenshots/framed/05-style.png" width="18%">
 </p>
 
-Original, unedited screenshots are in [`docs/screenshots/original`](docs/screenshots/original).
 
 ## Features
 
