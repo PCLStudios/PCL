@@ -1,36 +1,67 @@
-# PCL — Project Chronos Lock (v0.4.0)
+<p align="center"><img src="docs/icon.png" width="120" alt="PCL icon"></p>
 
-Voice-operated personal A.I. for Android. Side-panel UI, 80+ voice commands, whisper mode, online chatbot ("Third Eye").
+<h1 align="center">PCL · Project Chronos Lock</h1>
+<p align="center"><b>A voice-first assistant for Android.</b> Say “Chronos Lock”, run commands and automations, keep your music playing, and talk to an A.I. chatbot you can rename.</p>
 
-## Build the APK
-1. Android Studio (Koala or newer): File > Open > this PCL folder, let Gradle sync.
-2. Build > Build Bundle(s)/APK(s) > Build APK(s)  ->  app/build/outputs/apk/debug/app-debug.apk
-3. Install, allow Microphone + Notifications.
-4. (Recommended) System tab > BATTERY OPTIMISATION: exclude PCL, so listening survives screen-off.
+<p align="center">
+  <a href="https://buymeacoffee.com/pclstudios">Buy me a coffee</a> ·
+  <a href="https://x.com/pclglobal">@pclglobal</a> ·
+  <a href="https://github.com/PCLStudios">PCL Studios</a>
+</p>
 
-## How it works
-- Say **"Chronos Lock"** once. The big button turns green (ENGAGED). Sound-alikes work ("kronos luck", "cronus clock"...).
-- While engaged you can say commands directly: "combat mode", "set a timer for five minutes", "what time is it".
-- Before that, every command is ignored (voice AND the Combat/Quantum buttons).
-- "Chronos Lock, combat mode" in one breath also works.
-- "disengage" / "good night" / the button / the session timeout (System tab) ends the session.
-- **Whisper mode** ("whisper mode"): online recognition, longer listening window, looser wake matching, quiet replies.
-- **Third Eye** ("open third eye"): every sentence goes to an online chatbot that knows it is Third Eye. No history is kept.
-  "close third eye" / "goodbye" to leave. One-off: "ask what is gravity".
+---
 
-## Third Eye needs an API key
-Pollinations (default) now requires a free key: https://enter.pollinations.ai . Paste it in System > Third Eye.
-Presets for Groq, OpenRouter, Gemini and any custom OpenAI-compatible server (e.g. Ollama) are in the same screen.
+## Features
 
-## Tweaking
-Commands: Commands.kt (the Commands screen is generated from that list). Wake matching: Wake.kt.
-Voice defaults: Voice screen. A.I. persona: System screen.
+- **Wake word.** Say “Chronos Lock” (or just “Chronos”). Fuzzy matching copes with mishearing; commands repair near-miss words.
+- **80+ voice commands.** Time, timers, alarms, notes, calls, apps, flashlight, volume, media, Wi-Fi/Bluetooth, battery and more.
+- **Music-safe mic.** An optional offline recogniser (Vosk) reads the microphone without taking audio focus, so music and videos keep playing while PCL listens.
+- **Renamable modes and chatbot.** Name Combat Mode, Quantum Focus and the chatbot anything. Say the name and it happens; she answers using it.
+- **Programs.** Automations that run when a mode switches on or off: open apps, play songs, set volume, speak, flash the flashlight, wait, timers, notes, switch other modes, ask the A.I., web search, and more, with IF conditions and chance.
+- **Chatbot.** Any OpenAI-compatible provider (Groq, Gemini, OpenRouter, Pollinations or your own server) using your own API key.
+- **Home widgets.** Every Home button is a widget: add, remove and reorder in EDIT mode.
+- **Themes.** Material You, dark / AMOLED / light, accent colours, fonts, optional glass UI, tasteful animations.
+- **In-app guide** with a step-by-step chatbot setup for beginners.
 
-## v0.4.0 extras
-- **ALWAYS ON** (round button on Home): off = the mic only listens while the big button has engaged a session.
-- **PROGRAMS** (side panel): program steps that run when Combat Mode / Quantum Focus turn on or off (open an app, play a song, media key...).
-- For programs to open apps with the screen off: System > ALLOW OVER OTHER APPS.
+## Install
 
+Download the latest signed APK from [Releases](../../releases) or from Uptodown. Updates install over the previous version because every release is signed with the same key.
 
-## Support PCL
-Buy me a coffee: https://buymeacoffee.com/pclstudios · GitHub: https://github.com/PCLStudios · X: @pclglobal · [Privacy policy](PRIVACY.md)
+Requirements: Android 8.0 (API 26) or newer, microphone permission, and Speech Services by Google for the standard recogniser.
+
+## Build from source
+
+Requirements: JDK 17, Gradle 8.9, Android SDK 34.
+
+```
+gradle assembleDebug
+```
+
+Release builds are produced by the **Build Release APK** GitHub Action, which signs with a private key kept in repository secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`). No keys are stored in this repository.
+
+## Project layout
+
+| File | What it does |
+| --- | --- |
+| `ChronosEngine.kt` | State, recognition loop, speech, timers, notes, chatbot |
+| `Wake.kt`, `Commands.kt`, `Names.kt` | Wake word, command table, renamable names |
+| `VoskMic.kt` | Music-safe offline microphone |
+| `Flows.kt`, `Screens3.kt` | Programs (automation steps and conditions) |
+| `Theme.kt`, `Widgets.kt`, `Screens*.kt` | Theming, Home widgets, screens |
+| `Ads.kt` | AdMob banner, rewarded Power Pass, consent |
+
+## Privacy
+
+PCL has no accounts and no server. See the [privacy policy](https://pclstudios.github.io/PCL/) or [PRIVACY.md](PRIVACY.md).
+
+## Support the project
+
+- [Buy me a coffee](https://buymeacoffee.com/pclstudios)
+- Solana: `5RXdE64oP5yZkzY7jaTZRasg8bfG6YV1oSiccmv4YATH`
+- Ethereum: `0x20f03f587ba7ca0b198e53cb4ae3d8e7e0e272a7`
+
+Stars and shares help too.
+
+## License
+
+[MIT](LICENSE) © 2026 PCL Studios
